@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Two metrics, `save.leanctx.share` and `save.lingua.share`: the share of the original tokens
+  that lean-ctx and LLMLingua saved this session, as a percentage. LLMLingua's share is its
+  last saved percentage, or comes from its compression ratio when that is all it reports.
+- Every metric in the catalogue has a semantic type (percent, count, money, duration, time,
+  ratio, label, name, enum, flags, counts, items, series, channels, conversation), and the
+  formatted types have one bounded formatter each, so a value is never wider than its type
+  allows.
+
 ### Fixed
 
 - After its source changed (a `git pull` in a checkout, an upgrade in place) the render daemon
