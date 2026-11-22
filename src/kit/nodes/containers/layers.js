@@ -4,6 +4,8 @@
 import { define } from "../define.js";
 import { LAYERS_PARAMS } from "./params.js";
 import { visible } from "./list.js";
+import { placeAlign } from "./grid.js";
+import { parseCells, serializeCells, overlay } from "../cells.js";
 
 const ZERO = Object.freeze({ min: 0, nat: 0, max: 0, rows: 0, minRows: 0 });
 
@@ -26,5 +28,21 @@ export const layersKind = define({
         return [k, { w: Math.max(Math.min(s.nat, w), Math.min(s.min, w)), h: Math.max(Math.min(s.rows, h), Math.min(s.minRows, h)) }];
       }),
     };
+  },
+  // Pictures below, glyphs above (§3.5): sprites are laid first, in their order, then every other
+  // layer in its order. A glyph keeps the background of what is under it.
+  draw(pl, dc) {
+    const { w, h } = pl;
+    const key = dc.surfaceKey;
+    const area = Array.from({ length: h }, () => parseCells(" ".repeat(w), key));
+    const order = [...pl.kids.filter((k) => k.r.kind === "sprite"), ...pl.kids.filter((k) => k.r.kind !== "sprite")];
+    for (const k of order) {
+      const lines = dc.drawKid(k);
+      const [ha, va] = placeAlign(k.r.p.place || "center");
+      const x = ha === "end" ? w - k.w : ha === "center" ? Math.floor((w - k.w) / 2) : 0;
+      const y0 = va === "end" ? h - k.h : va === "center" ? Math.floor((h - k.h) / 2) : 0;
+      lines.forEach((l, j) => { if (area[y0 + j]) overlay(area[y0 + j], parseCells(l, key), x); });
+    }
+    return area.map((cells) => serializeCells(cells, dc.restore));
   },
 });

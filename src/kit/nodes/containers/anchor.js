@@ -11,6 +11,7 @@
 import { define } from "../define.js";
 import { ANCHOR_PARAMS } from "./params.js";
 import { share, sum } from "./share.js";
+import { blank, block } from "../paint.js";
 
 export const COLUMNS = [["top_left", "left", "bottom_left"], ["top", "center", "bottom"], ["top_right", "right", "bottom_right"]];
 export const TRACKS = [["top_left", "top", "top_right"], ["left", "center", "right"], ["bottom_left", "bottom", "bottom_right"]];
@@ -94,5 +95,41 @@ export const anchorKind = define({
       at[pl] = { column: ci, track: t };
     }));
     return { kids, widths, heights, at };
+  },
+  draw(pl, dc) {
+    const { r, w, h, widths, heights } = pl;
+    const p = dc.params || r.p;
+    const out = (p.gravity || "in") === "out";
+    // Where content sits in its place: toward the centre (in) or the edges (out).
+    const hAlign = (ci, pl2) => {
+      if (p.place_align && typeof p.place_align[pl2] === "string") return p.place_align[pl2];
+      if (ci === 1) return "center";
+      return (ci === 0) !== out ? "end" : "start";
+    };
+    const vAlign = (t) => (t === 1 ? "center" : (t === 0) !== out ? "end" : "start");
+    const cells = {};
+    pl.kids.forEach((k) => {
+      const name = Object.keys(r.places).find((n) => r.places[n] === k.r);
+      cells[name] = { k, lines: dc.drawKid(k) };
+    });
+    const lines = [];
+    TRACKS.forEach((places, t) => {
+      const th = heights[t];
+      for (let y = 0; y < th; y++) {
+        let s = "";
+        places.forEach((name, ci) => {
+          const cw = widths[ci];
+          const c = cells[name];
+          if (!c) { s += blank(cw); return; }
+          const va = vAlign(t), ha = hAlign(ci, name);
+          const top = va === "end" ? th - c.k.h : va === "center" ? Math.floor((th - c.k.h) / 2) : 0;
+          const left = ha === "end" ? cw - c.k.w : ha === "center" ? Math.floor((cw - c.k.w) / 2) : 0;
+          const body = y >= top && y < top + c.k.h ? c.lines[y - top] : blank(c.k.w);
+          s += blank(left) + body + blank(cw - c.k.w - left);
+        });
+        lines.push(s);
+      }
+    });
+    return block(lines, w, h);
   },
 });

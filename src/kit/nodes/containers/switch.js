@@ -26,4 +26,8 @@ export const switchKind = define({
     const a = activeCase(r);
     return { kids: a && ctx.size(a) ? [[a, { w, h }]] : [] };
   },
+  draw(pl, dc) {
+    if (!pl.kids.length) return Array.from({ length: pl.h }, () => " ".repeat(pl.w));
+    return dc.drawKid(pl.kids[0]);
+  },
 });
