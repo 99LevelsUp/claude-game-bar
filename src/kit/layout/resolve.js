@@ -47,15 +47,18 @@ function resolveNode(node, scope, parent, env) {
   let value = metric && Object.hasOwn(env.values, metric) ? env.values[metric] : undefined;
   let empty = metric ? isNothing(value) : false;
   if (truthy(p.empty_when)) empty = true;
+  let standIn = null;
   if (metric && isNothing(value) && (p.empty === "zero" || p.empty === "full") && !truthy(p.empty_when)) {
-    // Drawn as if the value were 0 % or 100 %: there is something to show.
+    // Drawn as if the value were 0 % or 100 %: there is something to show. `standIn` says how the
+    // visual looks (full: a bar filled to its end, every glyph of a meter lit), whatever `invert` says.
     value = p.empty === "full" ? 100 : 0;
+    standIn = p.empty;
     empty = false;
   }
 
   const r = {
     node, id: node.id, path: node.path, kind: node.kind, desc: node.desc, p, scope: s,
-    metric, type, value, empty,
+    metric, type, value, empty, standIn,
     color: p.color ?? (parent ? parent.color : null),
     background: p.background ?? (parent ? parent.background : null),
     parent, depth: parent ? parent.depth + 1 : 0,

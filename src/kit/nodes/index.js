@@ -12,11 +12,25 @@ import { gridKind } from "./containers/grid.js";
 import { layersKind } from "./containers/layers.js";
 import { switchKind } from "./containers/switch.js";
 import { labelKind } from "./visuals/label.js";
+import { textKind } from "./visuals/text.js";
+import { numberKind } from "./visuals/number.js";
+import { barKind } from "./visuals/bar.js";
+import { meterKind } from "./visuals/meter.js";
+import { stateKind } from "./visuals/state.js";
+import { sparklineKind } from "./visuals/sparkline.js";
+import { columnsKind } from "./visuals/columns.js";
+import { scrollKind } from "./visuals/scroll.js";
+import { chatKind } from "./visuals/chat.js";
+import { spriteKind } from "./visuals/sprite.js";
 import { RESERVED_KINDS } from "./schema.js";
 
 const byName = (list) => Object.freeze(Object.fromEntries(list.map((d) => [d.name, d])));
 
-export const KINDS = byName([anchorKind, listKind, boxKind, gridKind, layersKind, switchKind, labelKind]);
+export const CONTAINERS = byName([anchorKind, listKind, boxKind, gridKind, layersKind, switchKind]);
+export const LEAVES = byName([labelKind, textKind, numberKind, barKind, meterKind, stateKind, sparklineKind, columnsKind, scrollKind, chatKind, spriteKind]);
+export const KINDS = Object.freeze({ ...CONTAINERS, ...LEAVES });
+
+export { PLATFORM_ICONS } from "./visuals/common.js";
 
 // The descriptor of a node kind, or null.
 export const kindOf = (name) => (typeof name === "string" && Object.hasOwn(KINDS, name) ? KINDS[name] : null);
