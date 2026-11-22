@@ -2,6 +2,7 @@
 
 import { define } from "../define.js";
 import { param } from "../schema.js";
+import { vlen } from "../../text.js";
 
 export const labelKind = define({
   name: "label",
@@ -9,5 +10,9 @@ export const labelKind = define({
   accepts: [],
   params: {
     text: param("text", "", "The text or glyphs it draws", { measured: true }),
+  },
+  size(r) {
+    const w = vlen(r.p.text);
+    return { min: w, nat: w, max: w, rows: 1, minRows: 1 };
   },
 });
