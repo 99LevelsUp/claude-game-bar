@@ -23,7 +23,7 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
-import { findGame, defaultGame, bundledSkins, bundledSkin } from "./games/index.js";
+import { findGame, defaultGame, bundledSkins, bundledSkin, legacySkin } from "./games/index.js";
 import { currentTheme } from "./theme.js";
 import { envGet } from "./platform/env.js";
 import { userDir } from "./platform/runtime.js";
@@ -55,7 +55,7 @@ export function clearSkin(env = process.env) {
 }
 
 const sizeOf = (game, name) => Object.keys(game.presetSkins).find((k) => game.presetSkins[k] === name) ?? null;
-const bundled = (s) => ({ name: s.name, file: s.file, game: s.game, size: sizeOf(s.game, s.name), user: false });
+const bundled = (s) => ({ name: s.name, file: s.file, entry: s.entry ?? null, game: s.game, size: sizeOf(s.game, s.name), user: false });
 
 export function userSkins(env = process.env) {
   let names;
@@ -68,22 +68,28 @@ export function userSkins(env = process.env) {
 
 function userSkin(name, env) {
   const file = path.join(userSkinsDir(env), name, `${name}.toml`);
-  return existsSync(file) ? { name, file, game: null, size: null, user: true } : null;
+  return existsSync(file) ? { name, file, entry: null, game: null, size: null, user: true } : null;
 }
 
 // Every skin the user can choose: the bundled ones in registry order, then the user's.
 export const listSkins = (env = process.env) => [...bundledSkins().map(bundled), ...userSkins(env)];
 
-// The skin called `name`: a bundled skin, else a user skin, else the default skin of the game (or
-// old theme name) `name`. Null when there is none.
-export function findSkin(name, env = process.env) {
-  if (!validName(name)) return null;
+// The skin called `name`: a bundled skin, else a user skin, else the entry an old skin name now draws
+// (a game's [legacy] skins, which keep the size the old name chose), else the default skin of the
+// game (or old theme name) `name`. Null when there is none.
+export function findSkin(name, env = process.env, depth = 0) {
+  if (!validName(name) || depth > 4) return null;
   const b = bundledSkin(name);
   if (b) return bundled(b);
   const own = userSkin(name, env);
   if (own) return own;
+  const old = legacySkin(name);
+  if (old) {
+    const s = findSkin(old.target, env, depth + 1);
+    if (s) return s;
+  }
   const game = findGame(name);
-  return game ? findSkin(game.defaultSkin, env) : null;
+  return game ? findSkin(game.defaultSkin, env, depth + 1) : null;
 }
 
 // The skin after `name` in listSkins order, wrapping; the first skin when `name` is not listed.

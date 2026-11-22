@@ -82,20 +82,34 @@ function skinFiles(dir) {
   });
 }
 
+// The skin entries ([skin.<name>]) of a game's skin file in the 3.0.0 format, in file order, or null
+// when the file is not one (src/kit/layout/load.js reads it in full when it is drawn).
+export function skinEntries(file) {
+  try {
+    const data = parseToml(readFileSync(file, "utf8"));
+    return data && data.version === 2 && data.skin && typeof data.skin === "object" ? Object.keys(data.skin) : null;
+  } catch { return null; }
+}
+
 export function readGame(dir) {
-  const m = parseToml(readFileSync(path.join(dir, "game.toml"), "utf8"));
+  const manifestFile = path.join(dir, "game.toml");
+  const m = parseToml(readFileSync(manifestFile, "utf8"));
   const legacy = m.legacy || {};
   const presetSkins = { ...(legacy.presets || {}) };
   const presets = Object.fromEntries(Object.keys(presetSkins).map((n) => [n, path.join(dir, "presets", `${n}.toml`)]));
   const readsPresets = legacy.reads_presets === true;
+  // A game in the 3.0.0 format keeps all its skins in one file, <name>.toml, as entries.
+  const skinFile = typeof m.name === "string" && existsSync(path.join(dir, `${m.name}.toml`)) ? path.join(dir, `${m.name}.toml`) : null;
   // The skins are read on first use: naming them reads every skin file, and a lookup that finds its
   // skin in an earlier game never needs a later game's.
   let skins = null;
   const listSkins = () => {
+    const entries = skinFile ? skinEntries(skinFile) : null;
+    if (entries) return entries.map((name) => ({ name, file: skinFile, entry: name }));
     const files = skinFiles(dir);
     const names = [...new Set([...Object.values(presetSkins), m.default_skin, ...files.map((f) => f.name)])]
       .filter((n) => typeof n === "string" && n);
-    return names.map((name) => ({ name, file: (files.find((f) => f.name === name) || {}).file || null }));
+    return names.map((name) => ({ name, file: (files.find((f) => f.name === name) || {}).file || null, entry: null }));
   };
   return {
     name: m.name,
@@ -103,9 +117,15 @@ export function readGame(dir) {
     aliases: [...(legacy.aliases || [])],
     default: m.default === true,
     dir,
+    manifest: manifestFile,
     defaultSkin: m.default_skin,
     readsPresets,
     presetSkins,
+    // Old skin names and the entries they now draw (3.0.0): { "doom-full": "doom", ... }.
+    legacySkins: { ...(legacy.skins || {}) },
+    // The game's style: its [vars] and its own line sets, as the manifest writes them.
+    vars: m.vars && typeof m.vars === "object" ? { ...m.vars } : {},
+    lines: m.lines && typeof m.lines === "object" ? { ...m.lines } : {},
     assets: m.assets ? { package: m.assets.package, version: m.assets.version, integrity: m.assets.integrity } : null,
     get skins() { return (skins ??= listSkins()); },
     presets,
@@ -144,6 +164,15 @@ export function bundledSkin(name) {
   for (const game of GAMES) {
     const s = game.skins.find((x) => x.name === name);
     if (s) return { ...s, game };
+  }
+  return null;
+}
+
+// The entry an old skin name now draws: { game, target } from the first game whose [legacy] skins
+// names it, or null.
+export function legacySkin(name) {
+  for (const game of GAMES) {
+    if (Object.hasOwn(game.legacySkins, name) && typeof game.legacySkins[name] === "string") return { game, target: game.legacySkins[name] };
   }
   return null;
 }

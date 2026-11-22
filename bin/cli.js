@@ -23,7 +23,7 @@
 // of claude-doom-statusbar, the package this one replaces: its entries are re-pointed here, its
 // DOOMBAR_ settings renamed, its saved theme kept, and the global package removed.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { PACKAGE_ROOT, SRC_DIR } from "../src/package-root.js";
 import {
@@ -44,11 +44,10 @@ import { terminalStep } from "../src/kit/raster/glyph-level.js";
 import { decodePng } from "../src/kit/raster/png.js";
 import { sgrFg, sgrBg } from "../src/kit/ansi.js";
 import { ensureEmojiFont } from "../src/install/emoji-font.js";
-import { defaultGame } from "../src/games/index.js";
-import { loadSkin } from "../src/kit/skin/load.js";
+import { defaultGame, GAMES } from "../src/games/index.js";
 import { isPlainObject } from "../src/kit/is.js";
 import { createAssetResolver, removeUnused } from "../src/platform/assets.js";
-import { installSkinAssets, skinPackages } from "../src/skin-assets.js";
+import { installSkinAssets, skinPackages, entryOf } from "../src/skin-assets.js";
 
 const HASH = rootHash(PACKAGE_ROOT); // this installation's daemon and its files
 
@@ -241,18 +240,35 @@ function installSkin(args, cfg) {
   return { name: s.name, warnings: s.warnings };
 }
 
-// The first default frame an animation of the skin tree under `node` names, or null.
-const firstFrame = (node) => (typeof node.params.default_frame === "string" && node.params.default_frame
-  ? node.params.default_frame : node.children.reduce((ref, k) => ref || firstFrame(k), null));
+// The picture of the first sprite of a 3.0.0 skin tree: its default frame, else its frames folder.
+function firstSprite(node) {
+  if (!node) return null;
+  if (node.kind === "sprite") {
+    const lit = (k) => (node.params[k] && typeof node.params[k].lit === "string" ? node.params[k].lit : "");
+    if (lit("default_frame") || lit("frames")) return lit("default_frame") || lit("frames");
+  }
+  for (const k of [...node.children, ...Object.values(node.places), ...node.cases.map((c) => c.node)]) {
+    const ref = firstSprite(k);
+    if (ref) return ref;
+  }
+  return null;
+}
 
-// The image the test card draws: the default frame of the first animation in the default game's
-// default skin, found through the asset store, or null.
+// The image the test card draws: the first picture of the first game whose default skin has a
+// sprite (the default game draws none), found through the asset store, or null. A frames folder
+// gives its first image.
 function sampleImage() {
-  const game = defaultGame();
-  const s = findSkin(game.defaultSkin);
-  const skin = s && s.file ? loadSkin(s.file).skin : null;
-  const ref = skin ? firstFrame(skin.root) : null;
-  return ref ? createAssetResolver({ folder: game.dir }).resolve(ref) : null;
+  for (const game of [defaultGame(), ...GAMES]) {
+    const entry = entryOf(findSkin(game.defaultSkin));
+    const ref = entry ? firstSprite(entry.root) : null;
+    let file = ref ? createAssetResolver({ folder: game.dir }).resolve(ref) : null;
+    if (file && existsSync(file) && statSync(file).isDirectory()) {
+      const png = readdirSync(file).filter((n) => n.toLowerCase().endsWith(".png")).sort()[0];
+      file = png ? path.join(file, png) : null;
+    }
+    if (file) return file;
+  }
+  return null;
 }
 
 // The glyph test card, then one face drawn at every step side by side, so the steps this terminal
