@@ -1,0 +1,61 @@
+version = 2
+game = "fixture"
+
+[skin.wide]
+root = "bar"
+
+[skin.narrow]
+root = "line"
+vars = { accent = "#00ff00" }
+
+[element.bar]
+kind = "switch"
+cases = [
+  { when = "= $rows >= 3", node = "tall" },
+  { node = "line" },
+]
+
+[element.tall]
+kind = "anchor"
+left = "side"
+center = { kind = "label", text = "@@" }
+right = { ref = "panel", vars = { accent = "#b03020" } }
+
+[element.side]
+kind = "list"
+direction = "horizontal"
+gap = 1
+children = [
+  { kind = "label", text = "a" },
+  "panel",
+  { kind = "label", text = "b" },
+]
+
+[element.panel]
+kind = "box"
+title = "PANEL"
+fill = "$panel"
+children = ["line"]
+
+[element.line]
+kind = "list"
+children = [
+  { kind = "label",
+    text = "multi-line inline table" },
+]
+
+[element.hotbar]
+kind = "grid"
+children = [{ kind = "repeat", template = "slot", items = [
+  { id = "slot-a", item = "A" },
+  { id = "slot-b", item = "B" },
+  { id = "slot-c", item = "C" },
+] }]
+
+[element.slot]
+kind = "list"
+priority = 2
+children = [{ kind = "label", text = "{item}" }]
+
+[skin.slots]
+root = "hotbar"
