@@ -11,7 +11,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { CATALOGUE, VALUE_TYPES } from "../../src/metrics/catalogue.js";
+import { CATALOGUE, VALUE_TYPES, SEMANTIC_TYPES } from "../../src/metrics/catalogue.js";
 import { collectValues } from "../../src/metrics/index.js";
 import { buildValues } from "../../src/metrics/session.js";
 import { activityValues } from "../../src/metrics/activity.js";
@@ -41,6 +41,7 @@ ok(VALUE_TYPES.length === 6 && VALUE_TYPES.every((t) => t in SHAPE), "the catalo
 for (const [id, e] of Object.entries(CATALOGUE)) {
   ok(typeof e.name === "string" && e.name.length > 0 && VALUE_TYPES.includes(e.type),
     `${id}: has a human name and a known value type (${JSON.stringify(e)})`);
+  ok(SEMANTIC_TYPES.includes(e.semantic), `${id}: has a semantic type (${e.semantic})`);
 }
 
 // --- A full session through collectValues --------------------------------------------------

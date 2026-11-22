@@ -23,4 +23,5 @@ export const RAW_SAMPLE = Object.freeze({
   "sys.disk": 63, "sys.clock": "14:23", "sys.zombies": 3,
   "sys.cores": [0.12, 0.30, 0.08, 0.95, 0.45, 0.18, 0.62, 0.22],
   "save.leanctx": "8.3k 63%", "save.lingua": "1.2k 1.3x",
+  "save.leanctx.share": 63, "save.lingua.share": 23.08,
 });

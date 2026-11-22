@@ -51,6 +51,7 @@ try {
   // --- delta on append: events under cwd are summed; rate from accumulated totals ---
   appendFileSync(ev, tc(800, 1000, `${CWD}/a.js`));
   ok(statsValues(SID, CWD)["save.leanctx"] === "800 80%", `counts new event under cwd (800/1000) (got ${JSON.stringify(statsValues(SID, CWD)["save.leanctx"])})`);
+  ok(statsValues(SID, CWD)["save.leanctx.share"] === 80, "the lean-ctx share saved is saved over original, as a percentage");
 
   // --- events outside cwd, and path-less events, are not counted ---
   ev = scenario();
@@ -122,9 +123,18 @@ try {
 
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-nested.json", { sessions: { test: { runs: 3, tokens_saved: 1234, last_ratio: 1.3 } } });
   ok(statsValues(SID, CWD)["save.lingua"] === "1.2k 1.3x", `llmlingua sessions[sid] ratio -> "1.2k 1.3x" (got ${JSON.stringify(statsValues(SID, CWD)["save.lingua"])})`);
+  {
+    const share = statsValues(SID, CWD)["save.lingua.share"];
+    ok(Math.round(share) === 23, `with only a ratio of 1.3, the share saved is 1 - 1/1.3 = 23% (got ${share})`);
+  }
 
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-pct.json", { sessions: { test: { tokens_saved: 2048, last_saved_pct: 75 } } });
   ok(statsValues(SID, CWD)["save.lingua"] === "2.0k 75%", "llmlingua last_saved_pct wins");
+  ok(statsValues(SID, CWD)["save.lingua.share"] === 75, "the share saved is last_saved_pct");
+
+  process.env.GAMEBAR_LLMLINGUA = writeJson("ling-count.json", { sessions: { test: { tokens_saved: 500 } } });
+  ok(statsValues(SID, CWD)["save.lingua"] === "500" && !("save.lingua.share" in statsValues(SID, CWD)),
+    "with neither a percentage nor a ratio, the tokens are shown and the share is absent");
 
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-frac.json", { sessions: { test: { tokens_saved: 1234, last_ratio: 1.3333 } } });
   ok(statsValues(SID, CWD)["save.lingua"] === "1.2k 1.3x", "many-decimal ratio normalized to 1 decimal");
