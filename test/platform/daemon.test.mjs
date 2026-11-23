@@ -82,7 +82,8 @@ const heartbeatFile = (hash = HASH, dir = TMPDIR) => path.join(dir, path.basenam
 // A session as the client hands it over; `bump` forces a new mtime so a rewrite is always seen.
 let bumps = 0;
 function session(key, { label = key, env = {}, hash = HASH, dir = TMPDIR } = {}) {
-  const fwd = { COLUMNS: "250", GAMEBAR_PRESET: path.join(PRESETS, "full.toml"),
+  // The session chose DOOM (with no choice the built-in default game would be drawn).
+  const fwd = { COLUMNS: "250", GAMEBAR_THEME: "doom", GAMEBAR_PRESET: path.join(PRESETS, "full.toml"),
     GAMEBAR_STATE: path.join(SB, `state-${key}.json`),
     GAMEBAR_EVENTS: SANDBOX_ENV.GAMEBAR_EVENTS, GAMEBAR_LLMLINGUA: SANDBOX_ENV.GAMEBAR_LLMLINGUA, ...env };
   const data = {
@@ -252,6 +253,7 @@ try {
     process.env.WT_SESSION = "spawner-terminal";
     try {
       const s = session("unset");
+      delete s.fwd.GAMEBAR_THEME;
       delete s.fwd.GAMEBAR_STATE;
       s.write();
       const now = Date.now();
@@ -361,8 +363,8 @@ try {
   // The skin is the session's own: one session's GAMEBAR_SKIN draws that skin, and a session without
   // one never takes the GAMEBAR_SKIN the daemon inherited.
   {
-    const { defaultGame } = await import("../../src/games/index.js");
-    const sizes = defaultGame().presetSkins;
+    const { GAMES } = await import("../../src/games/index.js");
+    const sizes = GAMES.find((g) => g.readsPresets).presetSkins;
     const saved = process.env.GAMEBAR_SKIN;
     process.env.GAMEBAR_SKIN = sizes.minimal;
     try {
@@ -398,7 +400,7 @@ try {
       writeFileSync(path.join(dir, "s.js"), source);
       const ids = Array.from({ length: count }, (_, i) => `e${i}`);
       writeFileSync(path.join(dir, `${name}.toml`), [
-        "version = 1", 'root = "bar"', "[element.bar]", 'kind = "row"', `children = ${JSON.stringify(ids)}`,
+        "version = 2", `[skin.${name}]`, 'root = "bar"', "[element.bar]", 'kind = "list"', `children = ${JSON.stringify(ids)}`,
         ...ids.flatMap((id) => [`[element.${id}]`, 'kind = "text"', 'metric = "model.name"', "width = 12", "min_width = 12", 'script = "s.js"']),
       ].join("\n"));
       return path.join(dir, "s.js");
