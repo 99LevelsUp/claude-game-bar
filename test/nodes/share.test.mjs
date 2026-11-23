@@ -28,6 +28,12 @@ const CASES = [
     [kid(3, 12, { grow: 1 }), kid(3, 5)], 14, [9, 5]],
   ["once the growing child is at its minimum, the others shrink", [kid(3, 12, { grow: 1 }), kid(3, 5)], 7, [3, 4]],
   ["growing children share what is left by their own ranges", [kid(2, 10, { grow: 1 }), kid(2, 6, { grow: 1 }), kid(4, 4)], 12, [5, 3, 4]],
+  // The Minecraft hearts and hunger: meters whose gaps grow in whole steps of count - 1 columns.
+  ["children that grow in steps get spare room a step at a time, the least grown first",
+    [kid(10, 19, { grow: 1, max: 28, step: 9 }), kid(20, 20, { grow: 1, max: 29, step: 9 })], 56, [19, 29]],
+  ["with room for every step, each reaches its max", [kid(10, 19, { grow: 1, max: 28, step: 9 }), kid(20, 20, { grow: 1, max: 29, step: 9 })], 75, [28, 29]],
+  ["short of room, what rounding leaves goes to the child furthest from its natural size",
+    [kid(10, 28, { step: 9 }), kid(20, 29, { step: 9 })], 56, [19, 29]],
 ];
 for (const [what, kids, room, want] of CASES) {
   const got = share(kids, room);

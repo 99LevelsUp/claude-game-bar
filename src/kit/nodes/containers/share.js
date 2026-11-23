@@ -19,7 +19,10 @@ export function share(kids, room) {
   if (room >= nat) {
     const out = kids.map((k) => k.nat);
     let left = room - nat;
-    const weight = (i) => (kids[i].grow > 0 && out[i] < (kids[i].max ?? Infinity) ? kids[i].grow : 0);
+    const stepped = (i) => kids[i].step > 1;
+    // Children that grow in whole steps (a meter's gaps) are served after the others, a step at a
+    // time, the least grown first: shared by weight, their columns would be rounded away.
+    const weight = (i) => (kids[i].grow > 0 && !stepped(i) && out[i] < (kids[i].max ?? Infinity) ? kids[i].grow : 0);
     for (let guard = 0; left > 0 && guard < 64; guard++) {
       const open = kids.map((_, i) => i).filter((i) => weight(i) > 0);
       if (!open.length) break;
@@ -40,6 +43,22 @@ export function share(kids, room) {
         break;
       }
       left = room - sum(out);
+    }
+    left = room - sum(out);
+    const grown = (i) => {
+      const k = kids[i], top = k.max ?? Infinity;
+      return top > k.min && Number.isFinite(top) ? (out[i] - k.min) / (top - k.min) : 1;
+    };
+    for (;;) {
+      let best = -1;
+      for (let i = 0; i < kids.length; i++) {
+        if (!(kids[i].grow > 0) || !stepped(i)) continue;
+        if (out[i] + kids[i].step > (kids[i].max ?? Infinity) || kids[i].step > left) continue;
+        if (best < 0 || grown(i) < grown(best)) best = i;
+      }
+      if (best < 0) break;
+      out[best] += kids[best].step;
+      left -= kids[best].step;
     }
     return out;
   }
@@ -73,12 +92,22 @@ function shrink(kids, room) {
   if (room <= min) return kids.map((k) => k.min);
   const t = (room - min) / (nat - min);
   const out = kids.map((k) => snap(k, k.min + Math.floor((k.nat - k.min) * t)));
+  // What rounding down left over goes, a step at a time, to the child furthest from its natural
+  // size (the earliest of equals), so two stepped children (a meter's gaps) both keep some of theirs
+  // rather than the first taking it all.
   let left = room - sum(out);
-  for (let pass = 0; left > 0 && pass < 2; pass++) {
-    for (let i = 0; i < kids.length && left > 0; i++) {
-      const stepW = kids[i].step > 1 ? kids[i].step : 1;
-      if (out[i] + stepW <= kids[i].nat && stepW <= left) { out[i] += stepW; left -= stepW; }
+  const stepOf = (k) => (k.step > 1 ? k.step : 1);
+  const filled = (i) => (kids[i].nat > kids[i].min ? (out[i] - kids[i].min) / (kids[i].nat - kids[i].min) : 1);
+  for (;;) {
+    let best = -1;
+    for (let i = 0; i < kids.length; i++) {
+      const s = stepOf(kids[i]);
+      if (out[i] + s > kids[i].nat || s > left) continue;
+      if (best < 0 || filled(i) < filled(best)) best = i;
     }
+    if (best < 0) break;
+    out[best] += stepOf(kids[best]);
+    left -= stepOf(kids[best]);
   }
   return out;
 }
