@@ -113,8 +113,8 @@ const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { retu
   // 1 s on EVERY platform, Windows included. The Git Bash / MSYS cost of a 1 Hz tick on Windows
   // is paid by the reaper, not by slowing the HUD down — a live clock is the point of this thing.
   ok(cfg.statusLine?.refreshInterval === 1, "statusLine refreshInterval is 1 on all platforms");
-  ok(cfg.env?.GAMEBAR_SKIN === "doom-full" && !("GAMEBAR_PRESET" in cfg.env),
-    `--preset full writes the DOOM game's full skin as GAMEBAR_SKIN, and no preset (${JSON.stringify(cfg.env)})`);
+  ok(cfg.env?.GAMEBAR_SKIN === "doom" && !("GAMEBAR_PRESET" in cfg.env),
+    `--preset full writes the DOOM game's full size, the doom skin, as GAMEBAR_SKIN, and no preset (${JSON.stringify(cfg.env)})`);
   ok(!existsSync(path.join(tmp, "user", "skin.json")), "a project install saves no skin choice of the user's");
   ok(cfg.env?.FORCE_HYPERLINK === "1", "FORCE_HYPERLINK = 1");
   const EVENTS = ["SessionStart", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionDenied",

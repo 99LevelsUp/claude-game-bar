@@ -229,6 +229,14 @@ function installSkin(args, cfg) {
   const env = { ...ownEnv(), ...(cfg.env && typeof cfg.env === "object" ? cfg.env : {}) };
   if (args.preset) {
     for (const k of [...bothNames("SKIN"), ...bothNames("PRESET")]) delete env[k];
+    // A size is a size of a game that has sizes: when the game drawn now has none (the default
+    // game), the first game that names this size is meant.
+    const size = args.preset.replace(/\.toml$/, "");
+    const current = selectSkin(env).game;
+    if (!current || !current.readsPresets) {
+      const sized = GAMES.find((g) => g.readsPresets && Object.hasOwn(g.presetSkins, size));
+      if (sized) { for (const k of bothNames("THEME")) delete env[k]; env[newName("THEME")] = sized.name; }
+    }
     env[newName("PRESET")] = args.preset.endsWith(".toml") ? args.preset : `${args.preset}.toml`;
     const s = selectSkin(env);
     if (s.warnings.some((w) => w.cause === "old-preset")) {
