@@ -85,6 +85,8 @@ export function sysValues(cwd, now, env) {
     v["sys.disk"] = pyround(((stat.blocks - stat.bfree) / stat.blocks) * 100);
   } catch { /* ignore */ }
   const d = new Date(now * 1000);
-  v["sys.clock"] = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  // The local time of day in seconds since midnight: the formatter needs no time zone, and the hour
+  // a conversation asks for is this divided by 3600.
+  v["sys.clock"] = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
   return v;
 }

@@ -1,0 +1,22 @@
+version = 2
+game = "fixture-v2"
+
+# The full skin: a wide case, else a narrow one.
+[skin.fx]
+root = "pick"
+
+# The same tree, kept at the narrow size: what an old name that chose the small size draws.
+[skin.fx-small]
+root = { kind = "switch", children = ["narrow"] }
+
+[element.pick]
+kind = "switch"
+children = ["wide", "narrow"]
+
+[element.wide]
+kind = "label"
+text = "WIDE-WIDE-WIDE"
+
+[element.narrow]
+kind = "label"
+text = "narrow"

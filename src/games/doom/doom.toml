@@ -1,0 +1,385 @@
+# The DOOM game's skins: one tree with four alternatives (docs/ideation/2026-11-20-skin-component-
+# system.md §11.1). The root switch draws the first that fits the terminal: the tall bar (every box
+# around the Doomguy mugshot), the balanced bar (four boxes), the 3-row compact bar, and the 1-row
+# line. The tall bar loses SAVE from its left half and SYSTEM, then AGENTS and TASKS from its right
+# half before the switch moves on, and the mugshot is always exactly in the middle.
+#
+# The entries are what a user picks. doom-minimal and doom-compact start lower in the same tree, so
+# a user who chose a smaller size in 2.x never gets a taller bar.
+version = 2
+game = "doom"
+
+[skin.doom]
+root = "bar"
+
+[skin.doom-minimal]
+root = { kind = "switch", children = ["balanced", "compact", "line"] }
+
+[skin.doom-compact]
+root = { kind = "switch", children = ["compact", "line"] }
+
+[skin.doom-line]
+root = "line"
+
+[element.bar]
+kind = "switch"
+children = ["tall", "balanced", "compact", "line"]
+
+# --- the alternatives ---------------------------------------------------------------------------
+[element.tall]
+kind = "anchor"
+left = "left-side"
+center = "mugshot"
+right = "right-side"
+
+# Hugs the mugshot, so it cuts from its start (the open end).
+[element.left-side]
+kind = "list"
+align = "end"
+cross = "stretch"
+gap = 1
+children = ["model", "usage", "save", "project"]
+
+[element.right-side]
+kind = "list"
+align = "start"
+cross = "stretch"
+gap = 1
+children = ["activity", "agents", "tasks", "system"]
+
+# What doom-minimal was: PROJECT moves to the right so the halves weigh about the same.
+[element.balanced]
+kind = "anchor"
+left = { kind = "list", align = "end", cross = "stretch", gap = 1, children = ["model", "usage"] }
+center = "mugshot"
+right = { kind = "list", align = "start", cross = "stretch", gap = 1, children = ["project", "activity"] }
+
+# Three rows: the same boxes, without their titles and their optional rows.
+[element.compact]
+kind = "anchor"
+left = { kind = "list", align = "end", cross = "stretch", gap = 1, children = ["model", "usage"] }
+center = { kind = "sprite", frames = "doom:images/mugshot", script = "doom:scripts/mugshot.js", default_frame = "doom:images/mugshot/STFST01.png", rows = 3, glyphs = "octant", background = "#000000" }
+right = { kind = "list", align = "start", cross = "stretch", gap = 1, children = ["activity"] }
+
+# One row, no mugshot: the model, the context, both limits and the branch.
+[element.line]
+kind = "box"
+fill = "$panel"
+padding = 1
+gap = 2
+children = ["line-model", "line-context", "line-5h", "line-7d", "line-branch"]
+
+[element.line-model]
+kind = "text"
+metric = "model.name"
+icon = "🤖"
+width = 15
+min_width = 11
+priority = 3
+
+[element.line-context]
+kind = "bar"
+metric = "context.hp"
+icon = "🧠"
+width = 13
+min_width = 11
+
+[element.line-5h]
+kind = "list"
+gap = 1
+children = [
+  { kind = "bar", metric = "ratelimit.5h", icon = "🕔", label = "none", width = 7, min_width = 5 },
+  { kind = "text", metric = "usage.reset5h" },
+]
+
+[element.line-7d]
+kind = "list"
+gap = 1
+priority = 2
+children = [
+  { kind = "bar", metric = "ratelimit.7d", icon = "📅", label = "none", width = 7, min_width = 5 },
+  { kind = "text", metric = "usage.reset7d" },
+]
+
+[element.line-branch]
+kind = "text"
+metric = "git.branch"
+icon = "🌿"
+width = 17
+min_width = 11
+priority = 1
+
+# --- the mugshot ----------------------------------------------------------------------------------
+# DOOM's script picks the face for the session's reaction; without the script (the one-shot status
+# line) the idle face is drawn. The terminal's glyph step can only lower `glyphs`. No priority: the
+# mugshot is essential.
+[element.mugshot]
+kind = "sprite"
+frames = "doom:images/mugshot"
+script = "doom:scripts/mugshot.js"
+default_frame = "doom:images/mugshot/STFST01.png"
+rows = 6
+glyphs = "octant"
+background = "#000000"
+
+# --- MODEL ----------------------------------------------------------------------------------------
+[element.model]
+kind = "box"
+title = "MODEL"
+min_width = 7
+title_color = "$title"
+fill = "$panel"
+padding = 1
+direction = "vertical"
+cross = "stretch"
+children = ["model-line", "model-flags", "model-permission", "advisor"]
+
+# The effort icon right after the name.
+[element.model-line]
+kind = "list"
+gap = 1
+children = [
+  { kind = "text", metric = "model.name", icon = "🤖", width = 13, min_width = 11 },
+  { kind = "state", metric = "model.effort" },
+]
+
+# Thinking (💡 on, 👄 off) and fast mode (🏃 on, 🚶 off); the output style (👷 default,
+# 💁 explanatory, 🙋 learning, 🎨 a style of the user's own).
+[element.model-flags]
+kind = "list"
+gap = 1
+children = [
+  { kind = "state", metric = "model.mode" },
+  { kind = "state", metric = "model.style", other = "🎨" },
+]
+
+[element.model-permission]
+kind = "state"
+metric = "model.permission"
+show_text = true
+width = 10
+priority = 1
+
+[element.advisor]
+kind = "text"
+metric = "advisor.model"
+icon = "🧙"
+width = 13
+min_width = 9
+priority = 2
+
+# --- USAGE ----------------------------------------------------------------------------------------
+# In fewer rows the box keeps the context and both limits: RAM and the cost are optional.
+[element.usage]
+kind = "box"
+title = "USAGE"
+min_width = 7
+title_color = "$title"
+fill = "$panel"
+padding = 1
+direction = "vertical"
+cross = "stretch"
+children = ["context", "limit-5h", "limit-7d", "ram", "cost"]
+
+[element.context]
+kind = "list"
+gap = 1
+children = [
+  { kind = "bar", metric = "context.hp", icon = "🧠", label = "none", grow = 1 },
+  { kind = "number", metric = "context.hp", color = "$threshold" },
+]
+
+[element.limit-5h]
+kind = "list"
+gap = 1
+children = [
+  { kind = "bar", metric = "ratelimit.5h", icon = "🕔", label = "none", grow = 1 },
+  { kind = "text", metric = "usage.reset5h", align = "end" },
+]
+
+[element.limit-7d]
+kind = "list"
+gap = 1
+children = [
+  { kind = "bar", metric = "ratelimit.7d", icon = "📅", label = "none", grow = 1 },
+  { kind = "text", metric = "usage.reset7d", align = "end" },
+]
+
+[element.ram]
+kind = "list"
+gap = 1
+priority = 1
+children = [
+  { kind = "bar", metric = "sys.ram", icon = "💾", label = "none", grow = 1 },
+  { kind = "number", metric = "sys.ram", color = "$threshold" },
+]
+
+[element.cost]
+kind = "text"
+metric = "cost.total"
+icon = "💰"
+priority = 2
+
+# --- SAVE -----------------------------------------------------------------------------------------
+[element.save]
+kind = "box"
+title = "SAVE"
+min_width = 6
+title_color = "$title"
+fill = "$panel"
+padding = 1
+direction = "vertical"
+cross = "stretch"
+priority = 2
+# Each row: the tokens saved, then the share of the original they were (it goes first when narrow).
+children = [
+  { kind = "list", gap = 1, children = [
+      { kind = "text", metric = "save.leanctx", icon = "🪶", min_width = 9 },
+      { kind = "number", metric = "save.leanctx.share", priority = 1 } ] },
+  { kind = "list", gap = 1, children = [
+      { kind = "text", metric = "save.lingua", icon = "📜", min_width = 9 },
+      { kind = "number", metric = "save.lingua.share", priority = 1 } ] },
+]
+
+# --- PROJECT --------------------------------------------------------------------------------------
+[element.project]
+kind = "box"
+title = "PROJECT"
+min_width = 9
+title_color = "$title"
+fill = "$panel"
+padding = 1
+direction = "vertical"
+cross = "stretch"
+children = ["session", "cwd", "branch", "work", "churn", "pr"]
+
+[element.session]
+kind = "text"
+metric = "session.name"
+icon = "🎮"
+width = 19
+min_width = 13
+
+[element.cwd]
+kind = "text"
+metric = "loc.cwd"
+icon = "📁"
+width = 19
+min_width = 13
+
+[element.branch]
+kind = "text"
+metric = "git.branch"
+icon = "🌿"
+width = 19
+min_width = 13
+
+[element.work]
+kind = "state"
+metric = "git.work"
+items = 3
+width = 13
+min_width = 13
+
+# Lines added in green and removed in red: "+248 / -209".
+[element.churn]
+kind = "list"
+separator = " / "
+children = [
+  { kind = "number", metric = "loc.added", icon = "📝", prefix = "+", color = "$good" },
+  { kind = "number", metric = "loc.removed", prefix = "-", color = "$bad", align = "start" },
+]
+
+[element.pr]
+kind = "text"
+metric = "pr.state"
+icon = "⇧ "
+width = 11
+min_width = 8
+
+# --- ACTIVITY -------------------------------------------------------------------------------------
+# In three rows the task count is optional.
+[element.activity]
+kind = "box"
+title = "ACTIVITY"
+min_width = 10
+title_color = "$title"
+fill = "$panel"
+padding = 1
+direction = "vertical"
+cross = "stretch"
+children = [
+  { kind = "sparkline", metric = "act.geiger", icon = "📟", style = "octant", max = 1, width = 18, min_width = 8 },
+  { kind = "number", metric = "act.agents", icon = "👹", align = "start" },
+  { kind = "text", metric = "act.tasks", icon = "🎯", priority = 1 },
+  { kind = "number", metric = "act.errors", icon = "💢", color = "threshold", align = "start" },
+]
+
+# --- AGENTS and TASKS -----------------------------------------------------------------------------
+# Lists fill the bar's height; long labels scroll back and forth. With nothing to list the box keeps
+# its title and its place.
+[element.agents]
+kind = "box"
+title = "AGENTS"
+title_color = "$title"
+fill = "$panel"
+padding = 1
+empty = "blank"
+priority = 3
+children = [{ kind = "scroll", metric = "act.subagents", icon = "👹", rows = 4, min_rows = 2, width = 22, min_width = 19 }]
+
+[element.tasks]
+kind = "box"
+title = "TASKS"
+title_color = "$title"
+fill = "$panel"
+padding = 1
+empty = "blank"
+priority = 3
+children = [{ kind = "scroll", metric = "act.tasklist", anchor = "boundary", rows = 4, min_rows = 2, width = 22, min_width = 13 }]
+
+# --- SYSTEM ---------------------------------------------------------------------------------------
+[element.system]
+kind = "box"
+title = "SYSTEM"
+min_width = 8
+title_color = "$title"
+fill = "$panel"
+padding = 1
+direction = "vertical"
+cross = "stretch"
+priority = 1
+children = ["cpu", "disk", "zombies", "session-time", "clock"]
+
+# A column per core: 4 cores take 4 columns.
+[element.cpu]
+kind = "list"
+gap = 1
+children = [
+  { kind = "label", text = "🔥" },
+  { kind = "columns", metric = "sys.cores" },
+  { kind = "number", metric = "sys.cpu" },
+]
+
+[element.disk]
+kind = "bar"
+metric = "sys.disk"
+icon = "💿"
+
+# Live bash processes on Windows, red from 10 (where the MSYS add_item failure hits); absent elsewhere.
+[element.zombies]
+kind = "number"
+metric = "sys.zombies"
+icon = "🧟"
+color = [[5, "#7fae6a"], [8, "#e8c34a"], [10, "#e25555"]]
+align = "start"
+
+[element.session-time]
+kind = "text"
+metric = "sys.session"
+icon = "🕙"
+
+[element.clock]
+kind = "text"
+metric = "sys.clock"
+icon = "🕓"

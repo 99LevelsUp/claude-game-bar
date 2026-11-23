@@ -27,7 +27,7 @@ try {
   // A user skin whose root container has a parameter no descriptor knows: one warning.
   const dir = path.join(env.GAMEBAR_USER_DIR, "skins", "warned");
   mkdirSync(dir, { recursive: true });
-  copyFileSync(path.join(ROOT, "test", "fixtures", "skins", "unknown-root-param.toml"), path.join(dir, "warned.toml"));
+  copyFileSync(path.join(ROOT, "test", "fixtures", "skins-v2", "unknown-root-param.toml"), path.join(dir, "warned.toml"));
   const seen = path.join(SB, WARNINGS_FILE);
   const render = () => strip(execFileSync(process.execPath, [path.join(ROOT, "src", "statusline.js")], {
     env, encoding: "utf8", input: JSON.stringify({ session_id: "warned", model: { display_name: "Opus 5.5" } }),

@@ -8,10 +8,6 @@ import path from "node:path";
 import { sessionPaths, readLearned, oldStateFile } from "../platform/runtime.js";
 import { envGet } from "../platform/env.js";
 
-// Human-readable token count: 8263 -> "8.3k", 1200000 -> "1.2M", 512 -> "512".
-// Lowercase k/M — the savings rows read softer than model.window's uppercase K/M.
-const k = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`);
-
 const eventsPath = (env) => envGet("EVENTS", env) || path.join(os.homedir(), ".lean-ctx", "events.jsonl");
 const llmlinguaPath = (env) => envGet("LLMLINGUA", env) || path.join(os.homedir(), ".llmlingua-stats.json");
 
@@ -27,10 +23,9 @@ const normPath = (p) => {
   return process.platform === "win32" ? s.toLowerCase() : s;
 };
 
-// "8.3k 63%" — saved + a per-session compression rate derived from accumulated totals.
-function fmtSaved(st) {
-  return st.original > 0 ? `${k(st.saved)} ${Math.round(100 * st.saved / st.original)}%` : k(st.saved);
-}
+// The session's lean-ctx savings: the tokens saved, and the share of the original tokens saved
+// (null before any original is known), both from the totals accumulated over the session.
+const leanResult = (st) => ({ count: st.saved, share: st.original > 0 ? (100 * st.saved) / st.original : null });
 
 // The per-session totals file, and where a release before 1.0.0 kept it: the same name in the old
 // runtime directory, which differs only on Linux and macOS. No old place when GAMEBAR_SAVINGS_STATE
@@ -62,7 +57,7 @@ function leanCtxSavings(cwd, sid, env) {
 
   let size = -1;
   try { size = statSync(events).size; } catch { /* no log */ }
-  if (size < 0) return st.saved > 0 ? fmtSaved(st) : null; // log gone -> keep prior total
+  if (size < 0) return st.saved > 0 ? leanResult(st) : null; // log gone -> keep prior total
 
   if (st.offset === null) st.offset = size; // first sight of this session: count from now on
   // Log shrank -> lean-ctx rotated it (old events go to archives/, the restarted log holds only
@@ -98,19 +93,22 @@ function leanCtxSavings(cwd, sid, env) {
   if (after !== before) {
     try { writeFileSync(sp, after); } catch { /* ignore */ }
   }
-  return st.saved > 0 ? fmtSaved(st) : null;
+  return st.saved > 0 ? leanResult(st) : null;
 }
 
 // Per-session llmlingua. smart-read keys its sessions map by CLAUDE_CODE_SESSION_ID — the same
 // id the statusbar gets on stdin — so we read sessions[sid] (not a single global block).
-// Prefer last_saved_pct; else show the ratio. Flat lifetime-only writers expose no session -> absent.
+// Flat lifetime-only writers expose no session -> absent. The tokens saved, and the share saved:
+// last_saved_pct, or from the ratio when that is all there is (a ratio of r keeps 1/r of the
+// original, so 1 - 1/r of it was saved).
 function linguaSavings(sid, env) {
   const d = readJson(llmlinguaPath(env));
   const s = d && d.sessions && d.sessions[sid];
   if (!s || !(s.tokens_saved > 0)) return null;
-  if (s.last_saved_pct != null) return `${k(s.tokens_saved)} ${Math.round(s.last_saved_pct)}%`;
-  if (s.last_ratio != null) return `${k(s.tokens_saved)} ${Number(s.last_ratio).toFixed(1)}x`;
-  return k(s.tokens_saved);
+  const ratio = Number(s.last_ratio);
+  if (s.last_saved_pct != null) return { count: s.tokens_saved, share: Number(s.last_saved_pct) };
+  if (s.last_ratio != null && ratio > 0) return { count: s.tokens_saved, share: 100 * (1 - 1 / ratio) };
+  return { count: s.tokens_saved, share: null };
 }
 
 export function statsValues(data, cwd, env = process.env) {
@@ -118,9 +116,15 @@ export function statsValues(data, cwd, env = process.env) {
   const rawSid = String((data && data.session_id) || "default");
   const sid = rawSid.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 48); // filesystem-safe state-file key
   const lean = leanCtxSavings(cwd, sid, env);
-  if (lean) v["save.leanctx"] = lean;
+  if (lean) {
+    v["save.leanctx"] = lean.count;
+    if (lean.share !== null) v["save.leanctx.share"] = lean.share;
+  }
   // smart-read keys sessions[] by the RAW CLAUDE_CODE_SESSION_ID -> look up with the unsanitized id.
   const ling = linguaSavings(rawSid, env);
-  if (ling) v["save.lingua"] = ling;
+  if (ling) {
+    v["save.lingua"] = ling.count;
+    if (ling.share !== null) v["save.lingua.share"] = ling.share;
+  }
   return v;
 }

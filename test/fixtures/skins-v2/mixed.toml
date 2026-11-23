@@ -1,0 +1,44 @@
+# mixed: a user's own skin made of two games' parts, the DOOM mugshot beside the Minecraft hotbar.
+# Both scripts are the games' own: DOOM's picks the face for the session's reaction, Minecraft's
+# picks the highlighted slot (it knows the errors, lines-added and tasks slots by these ids).
+version = 2
+
+[skin.mixed]
+root = "bar"
+
+[element.bar]
+kind = "list"
+gap = 1
+children = ["mugshot", "hotbar"]
+
+[element.mugshot]
+kind = "sprite"
+frames = "doom:images/mugshot"
+script = "doom:scripts/mugshot.js"
+default_frame = "doom:images/mugshot/STFST01.png"
+rows = 4
+glyphs = "octant"
+background = "#000000"
+
+[element.hotbar]
+kind = "grid"
+lines = "heavy"
+line_color = "#8b8b8b"
+selected_color = "#ffffff"
+fill = "#262626"
+script = "minecraft:scripts/hotbar-highlight.js"
+children = [{ kind = "repeat", template = "slot", items = [
+  { id = "slot-added", item = "🧱", metric = "loc.added" },
+  { id = "slot-tasks", item = "🏆", metric = "act.tasks" },
+  { id = "slot-errors", item = "💥", metric = "act.errors" },
+  { id = "slot-clock", item = "🕓", metric = "sys.clock" },
+] }]
+
+[element.slot]
+kind = "list"
+direction = "vertical"
+cross = "center"
+children = [
+  { kind = "label", text = "{item}" },
+  { kind = "text", metric = "{metric}", color = "#ffffff", align = "center", overflow = "clip", width = 7, min_width = 5 },
+]

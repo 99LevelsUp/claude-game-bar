@@ -23,8 +23,8 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
-import { findGame, defaultGame, bundledSkins, bundledSkin } from "./games/index.js";
-import { currentTheme } from "./theme.js";
+import { GAMES, findGame, defaultGame, bundledSkins, bundledSkin, legacySkin } from "./games/index.js";
+import { chosenTheme } from "./theme.js";
 import { envGet } from "./platform/env.js";
 import { userDir } from "./platform/runtime.js";
 import { makeWarning } from "./kit/skin/warnings.js";
@@ -55,7 +55,7 @@ export function clearSkin(env = process.env) {
 }
 
 const sizeOf = (game, name) => Object.keys(game.presetSkins).find((k) => game.presetSkins[k] === name) ?? null;
-const bundled = (s) => ({ name: s.name, file: s.file, game: s.game, size: sizeOf(s.game, s.name), user: false });
+const bundled = (s) => ({ name: s.name, file: s.file, entry: s.entry ?? null, game: s.game, size: sizeOf(s.game, s.name), user: false });
 
 export function userSkins(env = process.env) {
   let names;
@@ -68,22 +68,28 @@ export function userSkins(env = process.env) {
 
 function userSkin(name, env) {
   const file = path.join(userSkinsDir(env), name, `${name}.toml`);
-  return existsSync(file) ? { name, file, game: null, size: null, user: true } : null;
+  return existsSync(file) ? { name, file, entry: null, game: null, size: null, user: true } : null;
 }
 
 // Every skin the user can choose: the bundled ones in registry order, then the user's.
 export const listSkins = (env = process.env) => [...bundledSkins().map(bundled), ...userSkins(env)];
 
-// The skin called `name`: a bundled skin, else a user skin, else the default skin of the game (or
-// old theme name) `name`. Null when there is none.
-export function findSkin(name, env = process.env) {
-  if (!validName(name)) return null;
+// The skin called `name`: a bundled skin, else a user skin, else the entry an old skin name now draws
+// (a game's [legacy] skins, which keep the size the old name chose), else the default skin of the
+// game (or old theme name) `name`. Null when there is none.
+export function findSkin(name, env = process.env, depth = 0) {
+  if (!validName(name) || depth > 4) return null;
   const b = bundledSkin(name);
   if (b) return bundled(b);
   const own = userSkin(name, env);
   if (own) return own;
+  const old = legacySkin(name);
+  if (old) {
+    const s = findSkin(old.target, env, depth + 1);
+    if (s) return s;
+  }
   const game = findGame(name);
-  return game ? findSkin(game.defaultSkin, env) : null;
+  return game ? findSkin(game.defaultSkin, env, depth + 1) : null;
 }
 
 // The skin after `name` in listSkins order, wrapping; the first skin when `name` is not listed.
@@ -94,6 +100,9 @@ export function nextSkin(name, env = process.env) {
 
 const warning = (cause, subject, message) => makeWarning({ key: `selection|${cause}|${subject}`, cause, subject, message });
 
+// The size a preset setting names: its file name without `.toml` ("minimal" for .../minimal.toml).
+const presetSize = (preset) => preset.split(/[\\/]/).pop().replace(/\.toml$/, "");
+
 export function selectSkin(env = process.env) {
   const warnings = [];
   const preset = envGet("PRESET", env) || "";
@@ -102,7 +111,7 @@ export function selectSkin(env = process.env) {
   const sized = (skin) => {
     const game = skin.game;
     if (!preset || !game || !game.readsPresets) return skin;
-    const size = preset.split(/[\\/]/).pop().replace(/\.toml$/, "");
+    const size = presetSize(preset);
     const other = Object.hasOwn(game.presetSkins, size) ? findSkin(game.presetSkins[size], env) : null;
     if (other) return other;
     warnings.push(warning("old-preset", preset,
@@ -125,6 +134,14 @@ export function selectSkin(env = process.env) {
     }
     warnings.push(warning("unknown-skin", saved, `no skin is called ${saved} (the saved skin)`));
   }
-  const game = findGame(currentTheme(env)) || defaultGame();
+  const chosen = chosenTheme(env);
+  let game = findGame(chosen) || defaultGame();
+  // A preset an older `install` wrote, with no theme chosen: before 3.0.0 the default game was DOOM,
+  // which read it, so it still picks the size of the first game that has one of that name, as
+  // `install --preset` does (bin/cli.js).
+  if (!chosen && preset && !game.readsPresets) {
+    const sizedGame = GAMES.find((g) => g.readsPresets && Object.hasOwn(g.presetSkins, presetSize(preset)));
+    if (sizedGame) game = sizedGame;
+  }
   return pick(sized(findSkin(game.defaultSkin, env)), "legacy");
 }

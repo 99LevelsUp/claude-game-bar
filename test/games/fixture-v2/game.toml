@@ -1,0 +1,12 @@
+# A game in the 3.0.0 format, for the registry tests: one skin file with several entries.
+name = "fixture-v2"
+description = "a fixture game in the 3.0.0 format"
+default_skin = "fx"
+
+[legacy]
+reads_presets = true
+presets = { full = "fx-old-full", small = "fx-old-small" }
+skins = { "fx-old-full" = "fx", "fx-old-small" = "fx-small" }
+
+[vars]
+panel = "#102030"

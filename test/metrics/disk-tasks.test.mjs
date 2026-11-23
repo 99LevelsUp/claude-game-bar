@@ -41,7 +41,7 @@ try {
 
   // Resume after a reboot: empty journal state, the open task still shows.
   const resumed = mergeDiskTasks({ offset: 0 }, disk);
-  ok(activityValues(resumed, now)["act.tasks"] === "1/2", "after a reboot the disk list gives 1 done of 2");
+  ok(String(activityValues(resumed, now)["act.tasks"]) === "1,2", "after a reboot the disk list gives 1 done of 2");
 
   // Disk status wins over a stale journal status; journal creation time is kept.
   const st = { tasks: { 1: { title: "first", status: "pending", ts: 10 } }, tasks_ts: 10 };
@@ -56,7 +56,7 @@ try {
   // Settled and quiet: the list empties after the linger, the count keeps the finished task.
   const all = mergeDiskTasks({}, { 1: { title: "a", status: "completed", ts: now - 100 } });
   const late = activityValues(all, now);
-  ok(late["act.tasks"] === "1/1", `finished task still counted after the linger (got ${late["act.tasks"]})`);
+  ok(String(late["act.tasks"]) === "1,1", `finished task still counted after the linger (got ${late["act.tasks"]})`);
   ok(late["act.tasklist"].length === 0, "settled list hides after the linger");
   ok(activityValues(all, now - 95)["act.tasklist"].length === 1, "settled list lingers briefly");
 
@@ -76,7 +76,7 @@ try {
     ok(cleaned["1"].status === "completed" && cleaned["1"].cleaned && cleaned["2"].cleaned, "ids up to the mark count as completed");
     ok(cleaned["3"].status === "pending" && !cleaned["3"].cleaned, "a live file above the mark is read as usual");
     const after = activityValues(mergeDiskTasks({ offset: 0 }, cleaned), now);
-    ok(after["act.tasks"] === "2/3", `after a reboot: 2 cleaned-up done of 3 (got ${after["act.tasks"]})`);
+    ok(String(after["act.tasks"]) === "2,3", `after a reboot: 2 cleaned-up done of 3 (got ${after["act.tasks"]})`);
     ok(after["act.tasklist"].length === 1 && after["act.tasklist"][0].text === "new", "cleaned-up tasks stay out of the list");
     // The journal still knows a cleaned-up task: it keeps its title and shows in the list.
     const withJ = mergeDiskTasks({ tasks: { 1: { title: "first", status: "pending", ts: now - 2 } } }, cleaned);

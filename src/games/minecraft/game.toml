@@ -1,15 +1,19 @@
-# The Minecraft game: the manifest the game registry (src/games/index.js) reads.
+# The Minecraft game: the manifest the game registry (src/games/index.js) reads. Its skin is the
+# entry of minecraft.toml.
 name = "minecraft"
 description = "the in-game look: chat, hearts, hunger, XP bar and a 9-slot hotbar"
 default_skin = "minecraft"
 
-# What a release before skins saved, and the skins it maps to.
+# What a release before 3.0.0 saved, and what it draws now.
 [legacy]
 # 0.12.x called this theme "minecraft-hud".
 aliases = ["minecraft-hud"]
 # One skin only: every preset file name draws it.
 reads_presets = false
 presets = { minecraft = "minecraft" }
+# minecraft-compact has no form of its own any more: the one tree gives up its parts in short and
+# narrow terminals.
+skins = { "minecraft-compact" = "minecraft" }
 
 # The npm package of the game's assets, pinned to one version and its npm integrity.
 [assets]

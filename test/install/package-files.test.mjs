@@ -60,6 +60,8 @@ console.log("each game's assets package and its pin:");
   const games = GAMES;
   ok(games.length > 0, `the registry lists the games (${games.map((g) => g.name).join(", ")})`);
   for (const game of games) {
+    // The built-in default game ships inside the bar: no [assets], no package.
+    if (!game.assets) { ok(!existsSync(path.join(ROOT, "packages", game.name)), `${game.name}: a game without [assets] has no packages/ folder`); continue; }
     const file = path.join(ROOT, "packages", game.name, "package.json");
     if (!existsSync(file)) { ok(false, `${game.name}: packages/${game.name}/package.json exists`); continue; }
     const pkg = JSON.parse(readFileSync(file, "utf8"));

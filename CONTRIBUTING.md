@@ -43,15 +43,14 @@ real daemons and must not run alongside anything else).
 ## Adding a game
 
 A game is data, scripts and assets. It brings no layout code: the bar is a tree of the platform's
-shared elements (containers and metric visuals, `src/kit/elements/`), and a game's skins compose
-that tree in TOML. A game that needs only the elements the platform has changes nothing outside its
-two folders. A new kind of element, such as a minimap, is ordinary platform work in
-`src/kit/elements/`.
+shared nodes (containers and metric visuals, `src/kit/nodes/`), and a game's skin file composes that
+tree in TOML. A game that needs only the nodes the platform has changes nothing outside its two
+folders. A new kind of node, such as a minimap, is ordinary platform work in `src/kit/nodes/`.
 
 ```
 src/games/<game>/
   game.toml          the manifest
-  skins/*.toml       the game's bundled skins
+  <game>.toml        the game's skins, as named entries of one file
 packages/<game>/     the npm package @claude-game-bar/<game> (see packages/README.md)
   package.json
   images/, scripts/, conversations/   its assets, in subfolders by kind
@@ -66,85 +65,163 @@ The manifest, `game.toml` (the comment at the top of `src/games/index.js` lists 
 
 - `name`, `description`: the game's name, which `skin <name>` also accepts, and the blurb in the
   skin list.
-- `default`: true for the one game drawn when nothing is chosen. `default_skin`: the skin drawn
-  when the game itself is chosen.
-- `[legacy]`: what a release before skins saved. `aliases` are older theme names that still choose
-  the game; `reads_presets` says whether the file name of `GAMEBAR_PRESET` picks the size;
-  `presets` maps a preset file name (without `.toml`) to the skin of that size.
+- `default`: true for the one game drawn when nothing is chosen, the built-in `default` game.
+  `default_skin`: the skin drawn when the game itself is chosen.
+- `[vars]`: the game's style, variables its skins read (`panel = "#1c2036"`,
+  `threshold = ["$good", "$warn", "$bad"]`); see [Variables and expressions](#variables-and-expressions).
+- `[lines]`: line sets of its own, eleven characters each (see [Lines](#lines)).
+- `[legacy]`: what a release before 3.0.0 saved. `aliases` are older theme names that still
+  choose the game; `reads_presets` says whether the file name of `GAMEBAR_PRESET` picks the size;
+  `presets` maps a preset file name (without `.toml`) to the skin name of that size; `skins` maps
+  old skin names to the entries they draw now (`"doom-full" = "doom"`).
 - `[assets]`: `package` (`@claude-game-bar/<game>`), `version` and `integrity`, the one version of
   the assets package the bar installs. `0.0.0` and an empty integrity pin nothing: the assets then
-  come only from a checkout's `packages/<game>/`. See [Asset packages](#asset-packages).
+  come only from a checkout's `packages/<game>/`. A game without `[assets]` (the built-in default
+  game) has no package at all. See [Asset packages](#asset-packages).
 
 `test/games/fixture-game/` is a working example of a game that is a folder and nothing else;
 `test/games/registry.test.mjs` registers and draws it.
 
 ### Skins
 
-A skin is one TOML file. The loader's header comment (`src/kit/skin/load.js`) is the reference;
-in short:
+A game's skin file holds its components and its named skins. The loader's header comment
+(`src/kit/layout/load.js`) is the reference; the design behind it, with worked examples, is
+`docs/ideation/2026-11-20-skin-component-system.md`.
 
-- top level: `version` (1), `name` (the file name without `.toml` when absent), `games` (the games
-  whose assets it uses), `root` (the id of the element the bar starts from) and `smaller` (the skin
-  to switch to when this one does not fit the width even with elements dropped, or is taller than
-  the rows the bar may take: a third of the terminal's, or `GAMEBAR_MAX_ROWS`; each skin down a
-  chain should be no wider and no taller than the one before it);
-- one `[element.<id>]` table per element, with its `kind` and the settings every element shares:
-  `metric` (a catalogue id from `src/metrics/catalogue.js`), `priority` (a whole number, lowest
-  dropped first when the bar is too narrow; no priority or `"keep"` is never dropped on its own),
-  `script`, `when_absent` (`"hide"`, `"empty"` or `"full"`: what a metric element does while the
-  session does not report its metric), `children` (a container's) and `frame` (`{ kind = "box" |
-  "grid", ... }` around a container);
-- the rest of the table is the kind's own parameters, described by its descriptor in
-  `src/kit/elements/` (name, meaning, type, default and allowed values of each);
-- every container (`row`, `column`, framed or not) also has:
-  - `when_empty`, what it does when nothing under it has anything to show (every metric element
-    under it has an absent, null, empty-list or empty-string value; a `when_absent` stand-in counts
-    as nothing, an element bound to no metric always counts as something): `"keep"` (the default)
-    holds its fitted width, `"shrink"` draws it at its minimum without its children (a box shows
-    only its title) and as tall as before, `"hide"` leaves it out of the bar so its space goes to
-    the others;
-  - `grow`, what its children do with width it has to spare: `"none"` (the default) leaves the room
-    to `align`; `"fill"` gives each child of a column the column's whole width, and shares a row's
-    surplus evenly among the children that can grow. A visual that cannot grow (an equalizer with
-    `sizing = "values"`) keeps its width, and `align` places it;
-  - a row's `center`, the id of a child drawn in the middle of the row, and `center_sides`, where
-    the others sit: `"edges"` (the default) puts the children before it at the row's start and
-    those after it right behind it (Minecraft's HUD, with the chat at the edge); `"close"` puts
-    both sides right against it (DOOM's mugshot among its boxes). A side too wide for its half
-    moves the centre away from it; with no room at all the children sit side by side. The bar's
-    root row with a `center` takes the terminal's whole width, so its centre child sits in the
-    middle of the terminal.
+```toml
+version = 2                 # the format; a file without it is not loaded
+game = "doom"
 
-An `animation` draws every frame of its `frames` folder on one canvas, the size of the folder's
-largest frame (`frameCanvas` in `src/kit/raster/asset-raster.js`), each frame centred across it and
-standing on its bottom edge, so frames of different sizes keep one scale and never jump. Its
-`width` of 0 (the default) makes it exactly as wide as that canvas drawn at its `rows`; the fit
-measures the frames through the render's asset lookup.
+[skin.doom]                 # a skin a user picks: its root, and optionally its own vars
+root = "bar"
 
-A box is never narrower than its title and padding. The equalizer's `sizing` says where its width
-comes from: `"stretch"` (the default) spreads the values over `columns`; `"values"` gives each value
-`column_width` columns (1 by default), at most `columns` in all, so 4 CPU cores take 4 columns. Use
-`"values"` for a list whose length holds while the bar runs; a series that grows would widen it.
+[element.bar]               # a component, by id
+kind = "switch"
+children = ["tall", "line"]
 
-Kinds: the containers `row` and `column`, the frames `box` and `grid`, and the visuals `text`,
-`number`, `progress`, `sparkline`, `equalizer`, `icon`, `icon-row`, `scroll-list`, `chat`,
-`animation` and `animation-3d`.
+[element.context]
+kind = "list"
+gap = 1
+children = [                # a child is an id, an inline node, or { ref = "id", vars = { ... } }
+  { kind = "label", text = "🧠" },
+  { kind = "bar", metric = "context.hp", label = "none", grow = 1 },
+  { kind = "number", metric = "context.hp", color = "$threshold" },
+]
+```
 
-A part of a skin that does not hold (an unknown key, kind, metric or parameter, a missing child) is
-skipped with one warning, shown as a dim line under the bar for 60 seconds, and the rest is drawn.
+- A child is an element id, an inline node (it gets the id `parent.1`, `parent.2`), or a reference
+  with variables of its own for its subtree. An element placed in several places (shared by switch
+  cases) is drawn in each, with its own script state.
+- `{ kind = "repeat", template = "slot", items = [{ id = "slot-cost", metric = "cost.total" }, ...] }`
+  in a list of children copies the template once per item, its `{placeholders}` filled from the
+  item and its id taken from the item's `id`.
+- A user skin is a file of the same format in `skins/<name>/<name>.toml`; it draws its entry named
+  like the folder, else its first. With `game = "<game>"` it draws with that game's style.
+
+**Every node** has these settings (`SHARED` in `src/kit/nodes/schema.js`):
+
+| Setting | Meaning |
+|---|---|
+| `kind` | the container, chrome leaf or visual it is |
+| `width`, `min_width`, `max_width` | natural, fewest and most columns; a visual's own come from its value's type, a container's from its children (`min_width` on a container is a floor) |
+| `rows`, `min_rows` | the rows it wants and the fewest it can live with. Sizes (these, the widths, and a kind's `gap`, `padding`, `columns`, `count`) stop at 1000 columns and 200 rows (`MAX_COLUMNS`, `MAX_ROWS`); a larger value is reported and its default used |
+| `grow` | a weight: how much of a parent's spare room it takes (0 = none) |
+| `priority` | an integer marks it optional: dropped when room runs out, the lowest first. Without one it is essential: never dropped on its own |
+| `empty` | what it does with nothing to show: `collapse` (no room), `blank` (a leaf keeps its minimum size, a container its frame and title), `zero` / `full` (draws as if the value were 0 % / 100 %) |
+| `empty_when` | an expression: while true, the node has nothing to show |
+| `align` | where its content sits in the width it was given |
+| `color`, `background` | inherited from the parent when not set |
+| `script` | a script run each render (below) |
+| `place` | where it sits inside `layers` |
+
+**Containers** (`src/kit/nodes/containers/`):
+
+- `anchor`: nine places (`top_left` ... `bottom_right`) around a `center`. It takes the whole width.
+  With `balance = "mirror"` (the default) both sides are equally wide, so the centre starts exactly
+  at `⌊(W − centre) / 2⌋`, and each side degrades inside its own half; `gravity = "in"` pulls the
+  content toward the centre, `"out"` to the edges.
+- `list`: children in a `direction` (`horizontal` or `vertical`), with `align` (`start`, `center`,
+  `end`, `between`), `cross` (`start`, `center`, `end`, `stretch`), `gap`, `separator` and `cut`
+  (the end that loses children first; by default the end away from `align`).
+- `box`: a list with a `title`, a `fill`, a `border` (a line set) and `padding`. It gives up its
+  decoration in this order: padding, border, title row.
+- `grid`: equal cells, `columns` a row, with `lines`, `selected_lines`, `line_color`,
+  `selected_color`, `fill` and `cell_align`. All cells shrink together, and a joint is drawn from
+  the arms that are there, so any number of cells can be selected by its script.
+- `layers`: children drawn over each other; a glyph keeps the background of what is under it.
+- `switch`: `cases = [{ when = "= ...", node = ... }, ...]` (a case without `when` is the else),
+  or `children` for cases without conditions. It draws the first case whose condition holds and
+  whose node fits; the conditions may read `$width` and `$rows`, the room it was given.
+
+**Leaves** (`src/kit/nodes/visuals/`): `label` (fixed text), and the visuals `text`, `number`,
+`bar`, `meter`, `state`, `sparkline`, `columns`, `scroll`, `chat` and `sprite` (frames). Each
+descriptor lists its own parameters with their meaning, type and default, and the value types it
+draws. A `text` or `number` of a formatted type (`percent`, `count`, `money`, `duration`, `time`,
+`ratio`) takes its natural and minimum width from the type's bounded formatter
+(`src/metrics/format.js`), so a value never moves the bar.
+
+**Fitting.** When the bar does not fit the terminal's width or its row budget (`GAMEBAR_MAX_ROWS`,
+else a third of the terminal's rows), every node first shrinks toward its minimum; then, at the
+smallest container that overflows: decoration goes, optional nodes are dropped (lowest priority
+first, from the cut end), inner switches take their next case, and only then does the enclosing
+switch move on. If even the last case does not fit, it is drawn cut at the edge.
+
+Kinds and parameters the design specifies but this release does not build (`each`, `marks`,
+`image`, `rule`, a computed `value`, `type`, `trend`, `trend_window`, `currency`, `joined`, a
+skin's `before` script, a sprite's `draw`, the `block` line set) are reported as not available in
+this version.
+
+A part of a skin that does not hold (an unknown key, kind, metric or parameter, a missing child, an
+expression that does not parse) is skipped with one warning, shown as a dim line under the bar for
+60 seconds, and the rest is drawn. A skin that throws while it is drawn gives way to the default
+game's default skin, and the warning names the error (`render-failed`, `src/render-core.js`).
+
+### Variables and expressions
+
+Any parameter may be `"$name"`, `"text with ${name}"`, or an expression starting with `=`:
+
+```toml
+color = "= case when $context.hp > 80 then $bad when $context.hp > 50 then $warn else $good end"
+title = "= case when $act.agents > 0 then 'AGENTS (' || $act.agents || ')' else 'AGENTS' end"
+empty_when = "= not has($ratelimit.5h)"
+```
+
+The language (`src/kit/layout/expr.js`) has numbers, `'text'`, `true`, `false`, `null`, `+ - * / %`,
+`||` (joins text), `= <> < <= > >=`, `in (...)`, `and`, `or`, `not`, `case when ... then ... else
+... end`, and the functions `has`, `coalesce`, `min`, `max`, `clamp`, `round`, `floor`, `len`,
+`mix(colour, colour, 0-1)` and `format($x[, 'compact'])`. It is parsed by the bar, never run as
+JavaScript. A name nobody defines, or a value of the wrong kind, keeps the parameter's default with a
+warning.
+
+The variables (`src/kit/layout/vars.js`): the game's `[vars]`, then the skin entry's `vars`, then a
+node's `vars` for its subtree. Every metric is a variable under its catalogue id, and a dot reads a
+field (`$git.branch.text`). `$now` and `$tick` are the time.
+
+### Lines
+
+A box's `border` and a grid's `lines` name a line set of eleven characters, in this order: top-left
+corner, horizontal line, top joint, top-right corner, vertical line, left joint, cross, right
+joint, bottom-left corner, bottom joint, bottom-right corner. The bar has `light`, `heavy`,
+`double`, `rounded` and `ascii`; a game adds its own in `[lines]`.
+
+### Assets
 
 An asset reference is `<game>:<path>`, a path inside that game's assets package
 (`doom:images/mugshot/STFST01.png`). A plain path is the skin's own: inside a user skin's folder,
 or for a bundled skin inside its game folder `src/games/<game>/`. A reference naming an npm package
 (`@scope/...`) is refused with a warning; the bar installs only the packages game manifests pin.
 
+A `sprite` draws every frame of its `frames` folder on one canvas, the size of the folder's largest
+frame (`frameCanvas` in `src/kit/raster/asset-raster.js`), so frames of different sizes keep one
+scale and never jump; it is as wide as that canvas drawn at its `rows`.
+
 ### Skin scripts
 
 This interface is internal and may change between releases. Its reference is the header comment of
 `src/kit/skin/scripts.js`, with the host's rules in `src/platform/scripts/host.js`.
 
-Any element can name a `script`: the bar runs it before the element is drawn, and what it returns
-changes how the element looks this render. An `animation` needs one to pick its frame; DOOM's
+Any node can name a `script`: the bar runs it before the node is drawn, and what it returns changes
+how the node looks this render. A `sprite` needs one to pick its frame; DOOM's
 mugshot (`packages/doom/scripts/mugshot.js`) and Minecraft's hotbar highlight
 (`packages/minecraft/scripts/hotbar-highlight.js`) are working examples.
 
@@ -158,23 +235,23 @@ JSON, so a value JSON cannot hold (an age of `Infinity`) arrives as `null`.
 
 | Field | What it is |
 |---|---|
-| `value` | the element's metric value, raw as the catalogue gives it; `null` without a metric or while the session does not report it |
-| `standIn` | `null` while `value` is the metric's own; `"empty"` or `"full"` while the element draws a stand-in for an absent metric (its `when_absent`) |
+| `value` | the node's metric value, raw as the catalogue gives it; `null` without a metric or while the session does not report it |
+| `standIn` | `null` while `value` is the metric's own; `"zero"` or `"full"` while the node draws a stand-in for an absent metric (its `empty`) |
 | `metric` | the metric id, or `null` |
-| `params` | the element's parameters as the skin set them, defaults filled in |
+| `params` | the node's parameters for this render, defaults filled in and expressions evaluated |
 | `reaction` | the session's game-neutral reaction (`src/metrics/reaction.js`): `expr` and `exprAge` (what just happened and how many seconds ago), `flash` (the reaction showing now: `"dead"`, `"god"`, an expression or `null`), `hp` (0 healthy to 4), `god`, `dead` |
 | `now` | the time in seconds; `tick` the render tick |
-| `width`, `rows` | the columns and rows the fit gave the element |
-| `children` | a container's drawn children, in order: `[{ id, metric, value, standIn, width }]` |
-| `state` | what the script returned as `state` the last time it ran for this element in this session; `{}` the first time, and again after the skin or the script changes |
+| `width`, `rows` | the columns and rows the fit gave the node |
+| `children` | a container's drawn children, in order: `[{ id, metric, value, standIn, width }]`, `id` the element id the skin gives each |
+| `state` | what the script returned as `state` the last time it ran for this node in this session (a node placed in several places has a state in each); `{}` the first time, and again after the skin or the script changes |
 
 The result (anything else is ignored):
 
 | Field | What it does |
 |---|---|
-| `frame` | the frame an `animation` draws: a file name in its `frames` folder, `.png` added when it has no extension |
-| `selected` | the index among `children` of the cell a `grid` frame selects; outside the range selects none |
-| `params` | parameters drawn instead of the skin's this render (characters, colours, icons). A value the element's visual does not accept keeps the skin's. A script never changes an element's size: parameters that would change a frame's size are ignored, and a visual drawn wider is cut to its columns |
+| `frame` | the frame a `sprite` draws: a file name in its `frames` folder, `.png` added when it has no extension |
+| `selected` | the cells a `grid` selects: one index among `children`, or a list of indices or child ids; any number, or none |
+| `params` | parameters drawn instead of the skin's this render (characters, colours, icons). A value the node's kind does not accept keeps the skin's. A script never changes a node's size: a node drawn wider is cut to its columns |
 | `state` | kept for the next run; it is the only thing that survives, since the input is a copy |
 
 Where a script comes from follows the asset rules above: `<game>:<path>` from that game's assets, a
@@ -184,10 +261,10 @@ refused with a warning and never run.
 Budgets and failures:
 
 - Each call has 20 ms, enforced by the script's own timeout. All scripts of one render pass of the
-  daemon share 200 ms across every session it draws; when a session finds none left, its elements
+  daemon share 200 ms across every session it draws; when a session finds none left, its nodes
   draw their defaults for that render, with no warning and nothing turned off.
-- A script that throws, cannot be loaded or returns a promise draws its element's default (an
-  animation's `default_frame`, else a blank of its width), shows a warning under the bar, and is
+- A script that throws, cannot be loaded or returns a promise draws its node's default (a
+  sprite's `default_frame`, else a blank of its width), shows a warning under the bar, and is
   not run again until its file or its skin changes.
 - A script that runs past its budget is stopped and turned off for a cooldown: 30 s, doubling each
   time it runs late again, up to 10 minutes. A call that returns in time resets the cooldown to
@@ -195,7 +272,7 @@ Budgets and failures:
 - All scripts share one worker thread with a 64 MB heap.
 
 Scripts run only in the render daemon. The one-shot status line (no bash 5, or no daemon) runs
-none: an animation shows its `default_frame` there, and a chat plays the platform's metrics library
+none: a sprite shows its `default_frame` there, and a chat plays the platform's metrics library
 only.
 
 Scripts are trusted code, like any program the user installs: the bar runs them from the user's own
@@ -205,7 +282,7 @@ boundary.
 
 ### Conversation libraries
 
-A `chat` element plays conversations about the session; it costs no tokens. The platform's metrics
+A `chat` node plays conversations about the session; it costs no tokens. The platform's metrics
 library (`src/kit/chat/metrics-library.js`) always plays, the one-shot status line included. A skin
 adds libraries in the chat's `libraries` parameter; each is a script, found like any other, that
 defines `conversations(facts)` instead of `render`. Same budgets and failure rules; a library that
@@ -213,7 +290,9 @@ fails is left out of the chat with a warning. `packages/minecraft/conversations/
 a working example.
 
 `facts` holds every fact the chat can say (model, effort, context, rate limits, branch, tasks, CPU
-and more), as strings and numbers, `null` when unknown; the list is `facts()` in the metrics
+and more), as strings and numbers, `null` when unknown; a value the bar formats (the cost, the
+resets, the clock, the task ratio, the savings) is the same string the bar shows (`"$1.83"`,
+`"2h13m"`, `"14:23"`, `"2/5"`, `"8.3k 63%"`); the list is `facts()` in the metrics
 library. `family` lists the Claude model family by display name, one model per tier, so a library
 can cast other players from it without keeping its own list of models. The bar learns it
 (`src/metrics/models.js`, the metric `model.family`): it starts from a seed list and takes in every

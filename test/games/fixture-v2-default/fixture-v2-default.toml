@@ -1,0 +1,5 @@
+version = 2
+game = "fixture-v2-default"
+
+[skin.plain]
+root = { kind = "label", text = "plain" }

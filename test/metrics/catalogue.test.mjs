@@ -24,22 +24,32 @@ const same = (a, b, m) => {
 
 // The shape a value of each type has (see src/metrics/catalogue.js).
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+const unit = (v) => Array.isArray(v) && v.every((x) => isNum(x) && x >= 0 && x <= 1);
 const SHAPE = {
-  percentage: (v) => isNum(v) && v >= 0 && v <= 100,
-  number: isNum,
-  text: (v) => typeof v === "string"
+  percent: (v) => isNum(v) && v >= 0 && v <= 100,
+  count: (v) => isNum(v) && v >= 0,
+  money: (v) => isNum(v) && v >= 0,
+  duration: (v) => isNum(v) && v >= 0,
+  time: (v) => isNum(v) && v >= 0 && v < 86400,
+  ratio: (v) => Array.isArray(v) && v.length === 2 && v.every(isNum),
+  label: (v) => typeof v === "string",
+  name: (v) => typeof v === "string"
     || (v !== null && typeof v === "object" && typeof v.text === "string" && (v.url === null || typeof v.url === "string")),
-  list: Array.isArray,
-  timeseries: (v) => Array.isArray(v) && v.every((x) => isNum(x) && x >= 0 && x <= 1),
+  enum: (v) => typeof v === "string",
+  flags: Array.isArray,
+  counts: Array.isArray,
+  items: Array.isArray,
+  series: unit,
+  channels: unit,
   conversation: Array.isArray,
 };
 const hasEscape = (v) => (typeof v === "string" ? v.includes("\x1b")
   : v && typeof v === "object" ? Object.values(v).some(hasEscape) : false);
 
 // --- The catalogue itself ------------------------------------------------------------------
-ok(VALUE_TYPES.length === 6 && VALUE_TYPES.every((t) => t in SHAPE), "the catalogue names the six value types");
+ok(VALUE_TYPES.length === 15 && VALUE_TYPES.every((t) => t in SHAPE), "the catalogue names the fifteen value types");
 for (const [id, e] of Object.entries(CATALOGUE)) {
-  ok(typeof e.name === "string" && e.name.length > 0 && VALUE_TYPES.includes(e.type),
+  ok(typeof e.name === "string" && e.name.length > 0 && VALUE_TYPES.includes(e.type) && !("semantic" in e),
     `${id}: has a human name and a known value type (${JSON.stringify(e)})`);
 }
 
@@ -102,7 +112,11 @@ try {
   ok(escaped.length === 0, `no value carries an escape sequence (found in: ${escaped.join(", ") || "none"})`);
 
   ok(typeof values["sys.cpu"] === "number", `sys.cpu is a number (got ${JSON.stringify(values["sys.cpu"])})`);
-  ok(values["loc.churn"] === "+185 / -62", `loc.churn is plain text (got ${JSON.stringify(values["loc.churn"])})`);
+  ok(!("loc.churn" in values) && values["loc.added"] === 185 && values["loc.removed"] === 62, "the lines added and removed are two counts; loc.churn is gone");
+  ok(values["cost.total"] === 1.834 && values["sys.session"] === 21300 && values["usage.reset5h"] === 7980 && values["usage.reset7d"] === 273600,
+    `money is dollars and durations are seconds, raw (got ${JSON.stringify([values["cost.total"], values["sys.session"], values["usage.reset5h"], values["usage.reset7d"]])})`);
+  same(values["act.tasks"], [1, 2], "the task ratio is [done, total]");
+  ok(Number.isInteger(values["sys.clock"]) && values["sys.clock"] >= 0 && values["sys.clock"] < 86400, `the clock is the local time of day in seconds (got ${values["sys.clock"]})`);
   same(values["git.branch"], { text: "main", url: "https://github.com/acme/bar/tree/main" }, "git.branch carries its text and its forge link");
   same(values["loc.cwd"], { text: "repo", url: pathToFileURL(cwd).href }, "loc.cwd carries its name and a file link");
   same(values["pr.state"], { text: "#1234", url: "https://github.com/acme/bar/pull/1234" }, "pr.state carries its label and link");

@@ -1,0 +1,5 @@
+# The default game of the registry tests: drawn when nothing is chosen. It has no asset package.
+name = "fixture-v2-default"
+description = "a default fixture game"
+default = true
+default_skin = "plain"
