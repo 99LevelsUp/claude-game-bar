@@ -90,7 +90,12 @@ Saved skin choices keep working.
   showed the terminal's background instead of the panel.
 - The USAGE values took their short form (`4h`, `3d`, `55`) as soon as the box narrowed at all,
   though their bars had room to give. Children that grow now shrink first, so the values keep
-  `4h48m`, `3d20h` and `55%` until the bars are at their minimum.
+  `4h48m`, `3d20h` and `55%` until the bars are at their minimum. The context and RAM
+  percentages take a reset time's five columns, so the four USAGE bars are one length.
+- Claude Code cut the bar's right end with `…` (#37): it draws the status line 2 columns in and
+  keeps the last 2 columns free, and the bar counted only the first 2. The bar now takes the
+  terminal's width less 4 columns (`GAMEBAR_INDENT`, default 4), so a terminal too narrow for it
+  degrades the bar instead of cutting it.
 - After its source changed (a `git pull` in a checkout, an upgrade in place) the render daemon
   exited and nothing started a new one until the session's next hook, so an idle session greyed
   out and then showed `gamebar: offline`. The daemon now starts its successor from the new source
