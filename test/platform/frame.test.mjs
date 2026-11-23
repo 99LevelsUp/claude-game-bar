@@ -128,6 +128,19 @@ try {
     "greying keeps every visible character");
   ok(grey[2].includes("\x1b]8;;https://example.com\x1b\\link\x1b]8;;\x1b\\"), "hyperlinks pass through untouched");
   ok(same(greyLines([]), [OFFLINE_MARKER]), "an empty body greys to the marker alone");
+// Each colour keeps its own brightness, dimmed by one factor: black stays black, brighter stays brighter.
+const greyOfFg = (rgb) => Number(/38;2;(\d+);\1;\1m/.exec(greyLines([`\x1b[38;2;${rgb.join(";")}mx`])[0])?.[1]);
+const greyOfBg = (rgb) => Number(/48;2;(\d+);\1;\1m/.exec(greyLines([`\x1b[48;2;${rgb.join(";")}mx`])[0])?.[1]);
+ok(greyOfBg([0, 0, 0]) === 0 && greyOfFg([0, 0, 0]) === 0, `black stays black (background ${greyOfBg([0, 0, 0])}, foreground ${greyOfFg([0, 0, 0])})`);
+ok(greyLines(["\x1b[40mx"])[0].includes("48;2;0;0;0m"), "the basic black background stays black too");
+// In rising luminance: black, the DOOM panel, red, green, the DOOM title, white.
+const ramp = [[0, 0, 0], [28, 32, 54], [224, 84, 64], [96, 200, 104], [222, 202, 128], [255, 255, 255]].map(greyOfFg);
+ok(ramp.every((v, i) => i === 0 || v > ramp[i - 1]),
+  `greys follow the colours' luminance (${ramp.join(", ")})`);
+const half = greyOfFg([128, 128, 128]), white = greyOfFg([255, 255, 255]);
+ok(Math.abs(half * 2 - white) <= 2, `a grey's brightness is proportional to its colour's: mid grey ${half}, white ${white}`);
+ok(white < 255 && white >= 160, `white is dimmed but stays readable (${white})`);
+ok(OFFLINE_MARKER.includes(`38;2;${white};${white};${white}m`), "the OFFLINE marker is drawn in the brightest grey");
 
   // --- Atomic write ---------------------------------------------------------------------------
   const target = path.join(sandbox, "gamebar_frame_test.json");
