@@ -337,6 +337,24 @@ rows = 4
       "every node draws its default this pass, with no warning");
   }
 
+  console.log("a call the pass skips (#114)");
+  {
+    const fit = fitOf(load(userSkin("held", oneText("held.js"), { "held.js": "function render() { return { params: { icon: \"RAN\" } }; }" })));
+    const state = new Map();
+    const throwing = { runBatch() { throw new Error("the host broke"); } };
+    const first = run(fit, { state });
+    ok(plain(draw(first)[0]).includes("RAN"), "the script runs and its output is drawn (the checks below can fail)");
+    const held = run(fit, { state, host: throwing, now: NOW + 2 });
+    ok(plain(draw(held)[0]).includes("RAN") && held.warnings.length === 0,
+      `a call skipped 2 s later draws the script's last output, with no warning (${plain(draw(held)[0])})`);
+    const late = run(fit, { state, host: throwing, now: NOW + 6 });
+    ok(!plain(draw(late)[0]).includes("RAN"), "after 5 s without a run the node draws its default again");
+    const spent = createScriptPass({ budgetMs: 0, callBudgetMs: 10 });
+    ok(plain(draw(run(fit, { state, pass: spent, now: NOW + 1 }))[0]).includes("RAN"), "a pass with no time left holds it too");
+    const fresh = run(fit, { host: throwing, now: NOW + 1 });
+    ok(!plain(draw(fresh)[0]).includes("RAN"), "a session that never ran the script has nothing to hold: the default");
+  }
+
   console.log("a skin without scripts");
   {
     const fresh = createScriptHost();

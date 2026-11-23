@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the terminal's room wherever the switch sat; they are now the room the switch was given (an
   anchor's side, a box's inside, a grid's cell), and a side its container does not bound keeps
   the container's. No bundled skin uses `when`, so no bundled bar changes.
+- **A script the render had no time for keeps its last look** (#114). When a pass skips a
+  script's call (its time ran out, a batch was cut short, the script host failed), the node now
+  draws the script's last output, up to 5 seconds old, instead of its default for that one
+  render. The DOOM mugshot's default is the healthy face, so a skipped call made a hurt face
+  blink healthy.
 
 ## [3.0.0] - 2026-11-23
 
