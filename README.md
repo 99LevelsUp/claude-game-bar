@@ -180,7 +180,7 @@ The skin names of releases before 3.0.0 still work wherever they are saved, and 
 
 Your own skins live in `~/.claude/claude-game-bar/skins/<name>/`, each in its own folder as `<name>.toml`, with any images or scripts of its own beside it. An update replaces the bundled skins and never touches yours. A name a bundled skin already has is taken by the bundled one.
 
-The easiest start is a copy of a game's skin file (`src/games/<game>/<game>.toml` in the package). The copy keeps the game's style because it says `game = "doom"`, and it draws its entry named like its folder, else its first:
+The easiest start is a copy of a game's skin file (`src/games/<game>/<game>.toml` in the package). It draws its entry named like its folder, else its first:
 
 ```bash
 mkdir -p ~/.claude/claude-game-bar/skins/mine
