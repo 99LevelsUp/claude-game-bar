@@ -231,9 +231,14 @@ padding = 1
 direction = "vertical"
 cross = "stretch"
 priority = 2
+# Each row: the tokens saved, then the share of the original they were (it goes first when narrow).
 children = [
-  { kind = "text", metric = "save.leanctx", icon = "🪶", width = 12, min_width = 9 },
-  { kind = "text", metric = "save.lingua", icon = "📜", width = 12, min_width = 9 },
+  { kind = "list", gap = 1, children = [
+      { kind = "text", metric = "save.leanctx", icon = "🪶", min_width = 9 },
+      { kind = "number", metric = "save.leanctx.share", priority = 1 } ] },
+  { kind = "list", gap = 1, children = [
+      { kind = "text", metric = "save.lingua", icon = "📜", min_width = 9 },
+      { kind = "number", metric = "save.lingua.share", priority = 1 } ] },
 ]
 
 # --- PROJECT --------------------------------------------------------------------------------------

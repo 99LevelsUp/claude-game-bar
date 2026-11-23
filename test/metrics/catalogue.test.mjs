@@ -103,7 +103,11 @@ try {
   ok(escaped.length === 0, `no value carries an escape sequence (found in: ${escaped.join(", ") || "none"})`);
 
   ok(typeof values["sys.cpu"] === "number", `sys.cpu is a number (got ${JSON.stringify(values["sys.cpu"])})`);
-  ok(values["loc.churn"] === "+185 / -62", `loc.churn is plain text (got ${JSON.stringify(values["loc.churn"])})`);
+  ok(!("loc.churn" in values) && values["loc.added"] === 185 && values["loc.removed"] === 62, "the lines added and removed are two counts; loc.churn is gone");
+  ok(values["cost.total"] === 1.834 && values["sys.session"] === 21300 && values["usage.reset5h"] === 7980 && values["usage.reset7d"] === 273600,
+    `money is dollars and durations are seconds, raw (got ${JSON.stringify([values["cost.total"], values["sys.session"], values["usage.reset5h"], values["usage.reset7d"]])})`);
+  same(values["act.tasks"], [1, 2], "the task ratio is [done, total]");
+  ok(Number.isInteger(values["sys.clock"]) && values["sys.clock"] >= 0 && values["sys.clock"] < 86400, `the clock is the local time of day in seconds (got ${values["sys.clock"]})`);
   same(values["git.branch"], { text: "main", url: "https://github.com/acme/bar/tree/main" }, "git.branch carries its text and its forge link");
   same(values["loc.cwd"], { text: "repo", url: pathToFileURL(cwd).href }, "loc.cwd carries its name and a file link");
   same(values["pr.state"], { text: "#1234", url: "https://github.com/acme/bar/pull/1234" }, "pr.state carries its label and link");

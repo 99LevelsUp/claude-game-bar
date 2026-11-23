@@ -20,7 +20,7 @@ const st = { tasks: {
 const v = activityValues(st, now);
 
 // Count: done / total (total = done + pending + in_progress), deleted excluded.
-ok(v["act.tasks"] === "1/3", `act.tasks is done/total (got ${v["act.tasks"]})`);
+ok(String(v["act.tasks"]) === "1,3", `act.tasks is done/total (got ${v["act.tasks"]})`);
 
 // tasklist: settled (completed, deleted) then open (in_progress, pending).
 const list = v["act.tasklist"];
@@ -36,7 +36,7 @@ ok("act.tasklist" in activityValues(settled, 5 + 999), "tasklist always emitted 
 // Empty state: keys still present, with empty list / zero counts (AGENTS+TASKS+ACTIVITY shown at 0).
 const empty = activityValues({}, now);
 ok(Array.isArray(empty["act.tasklist"]) && empty["act.tasklist"].length === 0, "no tasks -> act.tasklist []");
-ok(empty["act.tasks"] === "0/0", `no tasks -> act.tasks 0/0 (got ${empty["act.tasks"]})`);
+ok(String(empty["act.tasks"]) === "0,0", `no tasks -> act.tasks 0/0 (got ${empty["act.tasks"]})`);
 ok(Array.isArray(empty["act.subagents"]) && empty["act.subagents"].length === 0, "no agents -> act.subagents []");
 ok(empty["act.agents"] === 0, `no agents -> act.agents 0 (got ${JSON.stringify(empty["act.agents"])})`);
 

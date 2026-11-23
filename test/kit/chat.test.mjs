@@ -29,17 +29,17 @@ const USER = path.join(TEMP_SANDBOX, "user");
 const RAW = {
   "model.name": "Opus 5.5", "model.effort": "high", "model.window": "1M", "model.mode": [["thinking", "on"], ["fast", "off"]],
   "model.permission": "auto", "model.style": "default", "advisor.model": "Opus 4.8",
-  "context.hp": 78, "ratelimit.5h": 64, "ratelimit.7d": 31, "usage.reset5h": "2h13m", "usage.reset7d": "3d4h",
-  "health.headroom": 36, "cost.total": "$1.83",
-  "session.title": "status bar themes", "sys.session": "5h55m", "loc.cwd": { text: "claude-game-bar", url: "file:///work/claude-game-bar" },
-  "loc.churn": "+185 / -62", "loc.added": 185, "git.branch": { text: "main", url: null },
+  "context.hp": 78, "ratelimit.5h": 64, "ratelimit.7d": 31, "usage.reset5h": 7980, "usage.reset7d": 273600,
+  "health.headroom": 36, "cost.total": 1.83,
+  "session.title": "status bar themes", "sys.session": 21300, "loc.cwd": { text: "claude-game-bar", url: "file:///work/claude-game-bar" },
+  "loc.added": 185, "loc.removed": 62, "git.branch": { text: "main", url: null },
   "git.status": 3, "git.behind": 2, "git.ahead": 3, "pr.state": { text: "#1234", url: "https://example.test/pull/1234" },
   "act.geiger": [0, 0.25, 0.5, 1, 0.75, 1, 0.5, 0.6, 0.3, 0.1, 0.4, 1, 0.8, 0.4], "act.agents": 2,
-  "act.subagents": [["hook events", "2m13s"], ["find configs", "12s"]], "act.tasks": "2/5",
+  "act.subagents": [["hook events", "2m13s"], ["find configs", "12s"]], "act.tasks": [2, 5],
   "act.tasklist": [{ status: "completed", text: "render engine" }, { status: "in_progress", text: "statusline values" },
     { status: "pending", text: "hook bus" }, { status: "pending", text: "installer" }],
   "act.errors": 0, "sys.ram": 47, "sys.cpu": 12, "sys.cores": [0.12, 0.30, 0.08, 0.95, 0.45, 0.18, 0.62, 0.22],
-  "sys.disk": 63, "sys.clock": "14:23", "sys.zombies": 3, "save.leanctx": "8.3k 63%", "save.lingua": "1.2k 1.3x",
+  "sys.disk": 63, "sys.clock": 51780, "sys.zombies": 3, "save.leanctx": 8300, "save.lingua": 1200, "save.leanctx.share": 63,
 };
 
 const CHAT = KINDS.chat;
@@ -118,6 +118,12 @@ try {
       `the family fact lists the model family by display name, each once (${fam.join(", ")})`);
     fam.push("changed");
     ok(!facts({}).family.includes("changed"), "each render gets its own copy of the family");
+    const F = facts(RAW);
+    ok(F.cost === "$1.83" && F.reset5h === "2h13m" && F.reset7d === "3d4h" && F.uptime === "5h55m" && F.tasks === "2/5",
+      `the facts of raw values are the bar's formatted strings (${[F.cost, F.reset5h, F.reset7d, F.uptime, F.tasks].join(", ")})`);
+    ok(F.clock === "14:23" && F.hour === 14, `a clock of 51780 seconds says 14:23 and hour 14, whatever the time zone (${F.clock}, ${F.hour})`);
+    ok(F.removed === 62 && F.added === 185, "the lines removed come from loc.removed");
+    ok(F.saved === "8.3k 63%" && F.lingua === "1.2k", `a saving says its tokens and, when known, its share (${F.saved}, ${F.lingua})`);
 
     const at80 = { ...RAW, "context.hp": 80 };
     const { cycle } = cycleOf(at80);

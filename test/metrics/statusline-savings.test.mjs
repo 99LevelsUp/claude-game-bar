@@ -3,6 +3,9 @@ import "../_temp-sandbox.mjs"; // before the modules that name temp paths
 import { statsValues } from "../../src/metrics/savings.js";
 import { RAW_SAMPLE } from "../_raw-sample.mjs";
 import { drawEntry } from "../_v2-draw.mjs";
+import { formatValue } from "../../src/metrics/format.js";
+// What the bar and the chat say of a saving: the tokens, and the share when it is known ("8.3k 63%").
+const said = (v, k) => (v[k] === undefined ? undefined : formatValue("count", v[k]) + (v[`${k}.share`] !== undefined ? ` ${Math.round(v[`${k}.share`])}%` : ""));
 import { vlen } from "../../src/kit/text.js";
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import os from "node:os";
@@ -47,7 +50,7 @@ try {
 
   // --- delta on append: events under cwd are summed; rate from accumulated totals ---
   appendFileSync(ev, tc(800, 1000, `${CWD}/a.js`));
-  ok(statsValues(SID, CWD)["save.leanctx"] === "800 80%", `counts new event under cwd (800/1000) (got ${JSON.stringify(statsValues(SID, CWD)["save.leanctx"])})`);
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "800 80%", `counts new event under cwd (800/1000) (got ${JSON.stringify(said(statsValues(SID, CWD), "save.leanctx"))})`);
   ok(statsValues(SID, CWD)["save.leanctx.share"] === 80, "the lean-ctx share saved is saved over original, as a percentage");
 
   // --- events outside cwd, and path-less events, are not counted ---
@@ -57,7 +60,7 @@ try {
   appendFileSync(ev, tc(800, 1000, `${CWD}/a.js`));
   appendFileSync(ev, tc(5000, 6000, "D:/Karat/other/b.cs")); // outside cwd
   appendFileSync(ev, tc(300, 400)); // path-less (ctx_shell)
-  ok(statsValues(SID, CWD)["save.leanctx"] === "800 80%", "outside-cwd and path-less events excluded");
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "800 80%", "outside-cwd and path-less events excluded");
 
   // --- boundary-safe prefix: a sibling dir sharing a prefix is not counted ---
   ev = scenario();
@@ -71,21 +74,21 @@ try {
   writeFileSync(ev, "");
   statsValues(SID, CWD);
   appendFileSync(ev, tc(800, 1000, `${CWD}/a.js`));
-  ok(statsValues(SID, CWD)["save.leanctx"] === "800 80%", "before cwd change: 800 80%");
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "800 80%", "before cwd change: 800 80%");
   const CWD2 = "D:/Karat/other";
   appendFileSync(ev, tc(1200, 2000, `${CWD2}/c.cs`));
-  ok(statsValues(SID, CWD2)["save.leanctx"] === "2.0k 67%", `after cwd change accumulates: (800+1200)/(1000+2000)=67% (got ${JSON.stringify(statsValues(SID, CWD2)["save.leanctx"])})`);
+  ok(said(statsValues(SID, CWD2), "save.leanctx") === "2.0k 67%", `after cwd change accumulates: (800+1200)/(1000+2000)=67% (got ${JSON.stringify(said(statsValues(SID, CWD2), "save.leanctx"))})`);
 
   // --- partial trailing line is held until its newline arrives ---
   ev = scenario();
   writeFileSync(ev, "");
   statsValues(SID, CWD);
   appendFileSync(ev, tc(1000, 2000, `${CWD}/a.js`));
-  ok(statsValues(SID, CWD)["save.leanctx"] === "1.0k 50%", "full line counted");
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "1.0k 50%", "full line counted");
   appendFileSync(ev, JSON.stringify({ id: 2, kind: { type: "ToolCall", path: `${CWD}/b.js`, tokens_saved: 500, tokens_original: 500 } })); // no newline
-  ok(statsValues(SID, CWD)["save.leanctx"] === "1.0k 50%", "partial line (no newline) not yet consumed");
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "1.0k 50%", "partial line (no newline) not yet consumed");
   appendFileSync(ev, "\n");
-  ok(statsValues(SID, CWD)["save.leanctx"] === "1.5k 60%", `partial line consumed after newline: (1000+500)/(2000+500)=60% (got ${JSON.stringify(statsValues(SID, CWD)["save.leanctx"])})`);
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "1.5k 60%", `partial line consumed after newline: (1000+500)/(2000+500)=60% (got ${JSON.stringify(said(statsValues(SID, CWD), "save.leanctx"))})`);
 
   // --- log truncation/rotation (offset > size) resets without crashing ---
   ev = scenario();
@@ -93,19 +96,19 @@ try {
   const statePath = process.env.GAMEBAR_SAVINGS_STATE;
   writeFileSync(statePath, JSON.stringify({ offset: 999999, saved: 1234, original: 2000 })); // stale huge offset
   const after = statsValues(SID, CWD); // must not throw; offset clamps to 0/size
-  ok(typeof (after["save.leanctx"]) === "string" || after["save.leanctx"] === undefined, "truncation/rotation handled without crash");
+  ok(typeof (after["save.leanctx"]) === "number" || after["save.leanctx"] === undefined, "truncation/rotation handled without crash");
 
   // --- k() formatting via accumulated savings ---
   ev = scenario();
   writeFileSync(ev, "");
   statsValues(SID, CWD);
   appendFileSync(ev, tc(8263, 13163, `${CWD}/big.js`));
-  ok(statsValues(SID, CWD)["save.leanctx"] === "8.3k 63%", `k() abbreviates: 8263 -> 8.3k, 63% (got ${JSON.stringify(statsValues(SID, CWD)["save.leanctx"])})`);
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "8.3k 63%", `k() abbreviates: 8263 -> 8.3k, 63% (got ${JSON.stringify(said(statsValues(SID, CWD), "save.leanctx"))})`);
   ev = scenario();
   writeFileSync(ev, "");
   statsValues(SID, CWD);
   appendFileSync(ev, tc(1200000, 2000000, `${CWD}/huge.js`));
-  ok(statsValues(SID, CWD)["save.leanctx"] === "1.2M 60%", "k() millions: 1200000 -> 1.2M");
+  ok(said(statsValues(SID, CWD), "save.leanctx") === "1.2M 60%", "k() millions: 1200000 -> 1.2M");
 
   // --- missing events log -> no key, no throw ---
   process.env.GAMEBAR_EVENTS = MISSING;
@@ -119,22 +122,22 @@ try {
   process.env.GAMEBAR_EVENTS = MISSING; // keep lean out of the way (SID sanitizes to "test")
 
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-nested.json", { sessions: { test: { runs: 3, tokens_saved: 1234, last_ratio: 1.3 } } });
-  ok(statsValues(SID, CWD)["save.lingua"] === "1.2k 1.3x", `llmlingua sessions[sid] ratio -> "1.2k 1.3x" (got ${JSON.stringify(statsValues(SID, CWD)["save.lingua"])})`);
+  ok(said(statsValues(SID, CWD), "save.lingua") === "1.2k 23%", `llmlingua sessions[sid] ratio 1.3 -> a share of 23% ("1.2k 23%") (got ${JSON.stringify(said(statsValues(SID, CWD), "save.lingua"))})`);
   {
     const share = statsValues(SID, CWD)["save.lingua.share"];
     ok(Math.round(share) === 23, `with only a ratio of 1.3, the share saved is 1 - 1/1.3 = 23% (got ${share})`);
   }
 
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-pct.json", { sessions: { test: { tokens_saved: 2048, last_saved_pct: 75 } } });
-  ok(statsValues(SID, CWD)["save.lingua"] === "2.0k 75%", "llmlingua last_saved_pct wins");
+  ok(said(statsValues(SID, CWD), "save.lingua") === "2.0k 75%", "llmlingua last_saved_pct wins");
   ok(statsValues(SID, CWD)["save.lingua.share"] === 75, "the share saved is last_saved_pct");
 
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-count.json", { sessions: { test: { tokens_saved: 500 } } });
-  ok(statsValues(SID, CWD)["save.lingua"] === "500" && !("save.lingua.share" in statsValues(SID, CWD)),
+  ok(said(statsValues(SID, CWD), "save.lingua") === "500" && !("save.lingua.share" in statsValues(SID, CWD)),
     "with neither a percentage nor a ratio, the tokens are shown and the share is absent");
 
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-frac.json", { sessions: { test: { tokens_saved: 1234, last_ratio: 1.3333 } } });
-  ok(statsValues(SID, CWD)["save.lingua"] === "1.2k 1.3x", "many-decimal ratio normalized to 1 decimal");
+  ok(said(statsValues(SID, CWD), "save.lingua") === "1.2k 25%", "a many-decimal ratio gives its share (1 - 1/1.3333 = 25%)");
 
   // another session's block must NOT leak into this session's row
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-other.json", { sessions: { "someone-else": { tokens_saved: 9999, last_ratio: 5.0 } } });
@@ -149,7 +152,7 @@ try {
   // lingua lookup uses the RAW session id (smart-read's key), not the filesystem-sanitized one
   const dotted = { session_id: "abc.def:99" }; // chars sanitize would mangle
   process.env.GAMEBAR_LLMLINGUA = writeJson("ling-raw.json", { sessions: { "abc.def:99": { tokens_saved: 1500, last_ratio: 2.0 } } });
-  ok(statsValues(dotted, CWD)["save.lingua"] === "1.5k 2.0x", `raw session id used for lingua key (got ${JSON.stringify(statsValues(dotted, CWD)["save.lingua"])})`);
+  ok(said(statsValues(dotted, CWD), "save.lingua") === "1.5k 50%", `raw session id used for lingua key (got ${JSON.stringify(said(statsValues(dotted, CWD), "save.lingua"))})`);
 
   // === presentation (the DOOM skins) ===
   ok(vlen("🪶") === 2, "lean icon 🪶 vlen 2");
@@ -160,6 +163,8 @@ try {
   const noSave = { ...RAW_SAMPLE };
   delete noSave["save.leanctx"];
   delete noSave["save.lingua"];
+  delete noSave["save.leanctx.share"];
+  delete noSave["save.lingua.share"];
   let out = draw(noSave);
   ok(!out.includes("SAVE"), "savings absent -> SAVE box collapses");
   ok(out.includes("USAGE") && out.includes("PROJECT"), "other boxes still render (collapse is targeted, not total)");

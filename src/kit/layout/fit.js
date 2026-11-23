@@ -207,20 +207,31 @@ export function fitTree(root, { width, rows, env = {} } = {}) {
       apply: () => { for (const o of nodes) { o.dropped = true; invalidate(o); } },
       revert: () => { for (const o of nodes) { o.dropped = false; invalidate(o); } },
     });
-    // Priority by priority: each optional node alone, then siblings of that priority together, for
-    // when only all of them win anything (the nine slots of a hotbar standing in the way of a row,
-    // hearts and hunger side by side).
+    // Priority by priority: each optional node alone, then nodes of that priority together, for when
+    // only all of them win anything: siblings (the nine slots of a hotbar standing in the way of a
+    // row, hearts and hunger side by side), then those under one column (the share in each row of a
+    // box, every row as wide as the box).
+    const column = (o) => {
+      for (let a = o.parent; a; a = a.parent) if (a.kind === "box" || a.p.direction === "vertical") return a.path;
+      return "";
+    };
     const drops = [];
     for (const prio of [...new Set(optional.map((o) => o.p.priority))]) {
       const level = optional.filter((o) => o.p.priority === prio);
       drops.push(...level.map((o) => dropAll([o])));
-      const groups = new Map();
-      for (const o of level) {
-        const key = o.parent ? o.parent.path : "";
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(o);
+      const seen = new Set();
+      for (const keyOf of [(o) => (o.parent ? o.parent.path : ""), column]) {
+        const groups = new Map();
+        for (const o of level) {
+          const key = keyOf(o);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(o);
+        }
+        for (const g of groups.values()) {
+          const id = g.map((o) => o.path).join("|");
+          if (g.length > 1 && !seen.has(id)) { seen.add(id); drops.push(dropAll(g)); }
+        }
       }
-      drops.push(...[...groups.values()].filter((g) => g.length > 1).map(dropAll));
     }
     const inner = [];
     for (const s of switches.reverse()) {

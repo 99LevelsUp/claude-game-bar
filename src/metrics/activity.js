@@ -52,7 +52,7 @@ export function activityValues(st, now, meta = () => null) {
   // count in neither. What is left to do is total - done.
   const open = tasks.filter((t) => t.status === "pending" || t.status === "in_progress").length;
   const done = tasks.filter((t) => t.status === "completed").length;
-  v["act.tasks"] = `${done}/${done + open}`;
+  v["act.tasks"] = [done, done + open];
   // The list shows while anything is open and for TASK_LINGER seconds after the last change;
   // then it empties, but the count above still covers every task of the session.
   const anyOpen = open > 0;

@@ -47,18 +47,17 @@ export const CATALOGUE = {
   "context.hp": m("Context window used", "percentage", "percent"),
   "ratelimit.5h": m("5-hour usage limit used", "percentage", "percent"),
   "ratelimit.7d": m("7-day usage limit used", "percentage", "percent"),
-  "usage.reset5h": m("Time until the 5-hour limit resets", "text", "duration"),
-  "usage.reset7d": m("Time until the 7-day limit resets", "text", "duration"),
+  "usage.reset5h": m("Seconds until the 5-hour limit resets", "number", "duration"),
+  "usage.reset7d": m("Seconds until the 7-day limit resets", "number", "duration"),
   "health.headroom": m("Usage headroom left", "percentage", "percent"),
-  "cost.total": m("Session cost in US dollars", "text", "money"),
+  "cost.total": m("Session cost in US dollars", "number", "money"),
 
   // The session and where it works.
   "session.name": m("Session name, or its id when unnamed", "text", "name"),
   "session.title": m("Session name", "text", "name"),
-  "sys.session": m("Session duration", "text", "duration"),
+  "sys.session": m("Session duration in seconds", "number", "duration"),
   "loc.cwd": m("Project folder", "text", "name"),
-  "loc.churn": m("Lines added and removed", "text", "label"),
-  "loc.added": m("Lines added", "number", "count"),
+ "loc.added": m("Lines added", "number", "count"),
   "loc.removed": m("Lines removed", "number", "count"),
   "git.branch": m("Git branch", "text", "name"),
   "git.status": m("Changed files", "number", "count"),
@@ -74,7 +73,7 @@ export const CATALOGUE = {
   "act.agents": m("Running subagents", "number", "count"),
   // Items are [description, running time].
   "act.subagents": m("Running subagents and their time", "list", "items"),
-  "act.tasks": m("Tasks done of all tasks", "text", "ratio"),
+  "act.tasks": m("Tasks done of all tasks: [done, total]", "list", "ratio"),
   // Items are { status, text }, status one of completed, deleted, in_progress, pending.
   "act.tasklist": m("Task list", "list", "items"),
   "act.errors": m("Failed tool calls", "number", "count"),
@@ -85,12 +84,12 @@ export const CATALOGUE = {
   // Items are each core's use, from 0 to 1.
   "sys.cores": m("CPU use per core", "list", "channels"),
   "sys.disk": m("Disk used", "percentage", "percent"),
-  "sys.clock": m("Clock", "text", "time"),
+  "sys.clock": m("Local time of day in seconds since midnight", "number", "time"),
   "sys.zombies": m("Live bash processes (Windows)", "number", "count"),
 
   // Tokens saved by context tools: the tokens saved, and the share of the original they were.
-  "save.leanctx": m("Tokens saved by lean-ctx", "text", "count"),
-  "save.lingua": m("Tokens saved by LLMLingua", "text", "count"),
+  "save.leanctx": m("Tokens saved by lean-ctx", "number", "count"),
+  "save.lingua": m("Tokens saved by LLMLingua", "number", "count"),
   "save.leanctx.share": m("Share of tokens saved by lean-ctx", "percentage", "percent"),
   "save.lingua.share": m("Share of tokens saved by LLMLingua", "percentage", "percent"),
 };

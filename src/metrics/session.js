@@ -99,14 +99,15 @@ export function buildValues(data, git, now = Date.now() / 1000) {
   const rl = data.rate_limits || {};
   if (rl.five_hour) v["ratelimit.5h"] = pyround(rl.five_hour.used_percentage);
   if (rl.seven_day) v["ratelimit.7d"] = pyround(rl.seven_day.used_percentage);
-  if (rl.five_hour && rl.five_hour.resets_at) v["usage.reset5h"] = _dur(rl.five_hour.resets_at - now);
-  if (rl.seven_day && rl.seven_day.resets_at) v["usage.reset7d"] = _dur(rl.seven_day.resets_at - now);
+  // Durations in seconds and the cost in dollars: whatever draws them formats them
+  // (src/metrics/format.js), so a narrow bar can choose the compact form.
+  if (rl.five_hour && rl.five_hour.resets_at) v["usage.reset5h"] = Math.max(0, Math.round(rl.five_hour.resets_at - now));
+  if (rl.seven_day && rl.seven_day.resets_at) v["usage.reset7d"] = Math.max(0, Math.round(rl.seven_day.resets_at - now));
   const cost = data.cost || {};
-  if ("total_cost_usd" in cost) v["cost.total"] = "$" + cost.total_cost_usd.toFixed(2);
-  if ("total_duration_ms" in cost) v["sys.session"] = _dur(cost.total_duration_ms / 1000);
+  if (typeof cost.total_cost_usd === "number" && Number.isFinite(cost.total_cost_usd)) v["cost.total"] = Math.max(0, cost.total_cost_usd);
+  if (typeof cost.total_duration_ms === "number" && Number.isFinite(cost.total_duration_ms)) v["sys.session"] = Math.max(0, Math.round(cost.total_duration_ms / 1000));
   if ("total_lines_added" in cost || "total_lines_removed" in cost) {
     const a = cost.total_lines_added || 0, r = cost.total_lines_removed || 0;
-    v["loc.churn"] = `+${a} / -${r}`;
     v["loc.added"] = a;
     v["loc.removed"] = r;
   }

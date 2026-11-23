@@ -17,6 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   formatted types have one bounded formatter each, so a value is never wider than its type
   allows.
 
+### Changed
+
+- Metric values are raw where they used to be text: `cost.total` is dollars, `usage.reset5h`,
+  `usage.reset7d` and `sys.session` are seconds, `sys.clock` is the local time of day in seconds
+  since midnight, `act.tasks` is `[done, total]`, and `save.leanctx` and `save.lingua` are token
+  counts (their shares are the `.share` metrics). Whatever draws them formats them, so a narrow
+  bar can take the compact form (`4h` instead of `4h59m`). A skin script that read these values
+  as text gets numbers now. The chat's facts (`{cost}`, `{reset5h}`, `{clock}`, `{tasks}`,
+  `{saved}`, ...) keep their display strings; `{saved}` and `{lingua}` read "1.2k 23%", the share
+  replacing LLMLingua's ratio.
+
+### Removed
+
+- The `loc.churn` metric ("+185 / -62"): `loc.added` and `loc.removed` carry the same. The chat's
+  `{removed}` fact now comes from `loc.removed`.
+
 ### Fixed
 
 - After its source changed (a `git pull` in a checkout, an upgrade in place) the render daemon

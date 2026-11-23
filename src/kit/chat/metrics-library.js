@@ -33,6 +33,7 @@
 
 import { isPlainObject } from "../is.js";
 import { SEED_FAMILY } from "../../metrics/models.js";
+import { formatValue } from "../../metrics/format.js";
 
 // Who asks. The running model answers as "me".
 const CAST = { a: "Ada", b: "Ben" };
@@ -44,6 +45,8 @@ const textOf = (v) => {
   return s === "" ? null : s;
 };
 const numOf = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+// A raw value of a formatted type as the bar shows it (src/metrics/format.js), or null.
+const shown = (type, v) => textOf(v === null || v === undefined ? null : formatValue(type, v));
 const pctOf = (v) => (numOf(v) === null ? null : Math.round(v));
 const listOf = (v) => (Array.isArray(v) ? v : []);
 const flag = (pairs, name) => {
@@ -84,11 +87,11 @@ export function facts(values = {}) {
   F.ctxLeft = F.ctx === null ? null : 100 - F.ctx;
   F.p5 = pctOf(v["ratelimit.5h"]);
   F.p5Left = F.p5 === null ? null : 100 - F.p5;
-  F.reset5h = textOf(v["usage.reset5h"]);
+  F.reset5h = shown("duration", v["usage.reset5h"]);
   F.p7 = pctOf(v["ratelimit.7d"]);
-  F.reset7d = textOf(v["usage.reset7d"]);
+  F.reset7d = shown("duration", v["usage.reset7d"]);
   F.headroom = pctOf(v["health.headroom"]);
-  F.cost = textOf(v["cost.total"]);
+  F.cost = shown("money", v["cost.total"]);
 
   F.session = textOf(v["session.title"]);
   F.project = textOf(v["loc.cwd"]);
@@ -97,8 +100,7 @@ export function facts(values = {}) {
   F.behind = numOf(v["git.behind"]);
   F.ahead = numOf(v["git.ahead"]);
   F.added = numOf(v["loc.added"]);
-  const removed = /-(\d+)/.exec(textOf(v["loc.churn"]) || "");
-  F.removed = removed ? Number(removed[1]) : null;
+  F.removed = numOf(v["loc.removed"]);
   F.pr = textOf(v["pr.state"]);
 
   const geiger = listOf(v["act.geiger"]).filter((x) => numOf(x) !== null);
@@ -107,15 +109,20 @@ export function facts(values = {}) {
   const squad = listOf(v["act.subagents"]).filter(Array.isArray);
   F.agent = squad.length ? textOf(squad[0][0]) : null;
   F.agentTime = squad.length ? textOf(squad[0][1]) : null;
-  F.tasks = textOf(v["act.tasks"]);
+  F.tasks = shown("ratio", v["act.tasks"]);
   const tasks = listOf(v["act.tasklist"]).filter((t) => t && typeof t === "object");
   F.task = textOf(tasks.find((t) => t.status === "in_progress")?.text);
   F.nextTask = textOf(tasks.find((t) => t.status === "pending")?.text);
   F.doneTask = textOf(tasks.filter((t) => t.status === "completed").pop()?.text);
   F.errors = numOf(v["act.errors"]);
 
-  F.saved = textOf(v["save.leanctx"]);
-  F.lingua = textOf(v["save.lingua"]);
+  // The tokens saved and, when known, the share they were of the original: "8.3k 63%".
+  const saving = (count, share) => {
+    const c = shown("count", count);
+    return c === null ? null : numOf(share) === null ? c : `${c} ${Math.round(share)}%`;
+  };
+  F.saved = saving(v["save.leanctx"], v["save.leanctx.share"]);
+  F.lingua = saving(v["save.lingua"], v["save.lingua.share"]);
 
   F.cpu = pctOf(v["sys.cpu"]);
   const cores = listOf(v["sys.cores"]).filter((x) => numOf(x) !== null);
@@ -124,10 +131,10 @@ export function facts(values = {}) {
   F.ram = pctOf(v["sys.ram"]);
   F.disk = pctOf(v["sys.disk"]);
   F.processes = numOf(v["sys.zombies"]);
-  F.uptime = textOf(v["sys.session"]);
-  F.clock = textOf(v["sys.clock"]);
-  const hour = /^(\d{1,2}):/.exec(F.clock || "");
-  F.hour = hour ? Number(hour[1]) : null;
+  F.uptime = shown("duration", v["sys.session"]);
+  F.clock = shown("time", v["sys.clock"]);
+  // The clock is the local time of day in seconds since midnight.
+  F.hour = numOf(v["sys.clock"]) === null ? null : Math.floor((((v["sys.clock"] % 86400) + 86400) % 86400) / 3600);
   return F;
 }
 
