@@ -16,6 +16,13 @@ The ledger files next to this one were recorded on the 2.x skin engine. The skin
   - **Budgets 3, 4 and 5:** the compact bar from 58 (left 26, mugshot 6, right 10), the line below. No titles at 3 and 4 rows; at 5 rows MODEL and ACTIVITY keep their titles and USAGE gives its up.
   - **Budgets 1 and 2:** the line at every width.
 
+## doom-minimal and doom-compact
+
+Recorded since #100 (24.11.2026), after the 3.0.0 regeneration: they start lower in the doom tree, so
+each draws the doom ledger's balanced and compact bars (or the compact bar and the line) at the same
+widths, and never a taller bar. Every signature also records `face`, the mugshot's rows, which
+#93 found the ledger did not pin.
+
 ## doom-line
 
 - No change is expected beyond the clipped flag at widths too narrow for the line's minimum.

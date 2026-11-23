@@ -5,6 +5,7 @@
 //   left      the box titles left of the mugshot (all titles when there is no mugshot)
 //   right     the box titles right of the mugshot
 //   mugshot   the column of the bar where the mugshot starts, or null
+//   face      how many rows the mugshot takes, or null
 //   slots     how many hotbar slots are visible, or null when the bar has no hotbar
 //   clipped   whether the bar is drawn cut at the edge
 // Runs of widths with the same signature are stored as one entry, so a ledger file reads as the
@@ -26,7 +27,7 @@ export const WIDTH_FROM = 40;
 export const WIDTH_TO = 250;
 export const ROW_BUDGETS = [1, 2, 3, 4, 5, 6, 7, 8];
 // The ledger files and the skin entries they record.
-export const ENTRIES = { doom: "doom", "doom-line": "doom-line", minecraft: "minecraft" };
+export const ENTRIES = { doom: "doom", "doom-minimal": "doom-minimal", "doom-compact": "doom-compact", "doom-line": "doom-line", minecraft: "minecraft" };
 
 const NOW = 1793500000;
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g, "");
@@ -68,12 +69,23 @@ function slotsOf(lines) {
 }
 
 // The signature of a drawing.
-export function signatureOf(lines, clipped) {
+// `face` is the rows the fit gave the mugshot (the sprite), or, when the caller does not know it,
+// the lines with an octant glyph; null without a mugshot.
+export function signatureOf(lines, clipped, face = undefined) {
   const mugshot = mugshotColumn(lines);
   const titles = titlesOf(lines);
   const left = titles.filter((t) => mugshot === null || t.col < mugshot).map((t) => t.title);
   const right = mugshot === null ? [] : titles.filter((t) => t.col >= mugshot).map((t) => t.title);
-  return { rows: lines.length, left, right, mugshot, slots: slotsOf(lines), clipped: Boolean(clipped) };
+  const rowsOfFace = mugshot === null ? null : face !== undefined ? face : lines.filter((line) => OCTANT.test(strip(line))).length;
+  return { rows: lines.length, left, right, mugshot, face: rowsOfFace, slots: slotsOf(lines), clipped: Boolean(clipped) };
+}
+
+// The rows the first sprite (the mugshot) is given in a fitted tree, or null.
+function spriteRows(pl) {
+  if (!pl) return null;
+  if (pl.r.kind === "sprite") return pl.h;
+  for (const k of pl.kids) { const h = spriteRows(k); if (h) return h; }
+  return null;
 }
 
 // The values every drawing is made with.
@@ -92,7 +104,7 @@ export function drawWith(values) {
     const ctx = { tick: 0, step: "octant", resolveAsset: assets.resolve, reaction: null, now: NOW };
     const fit = fitTree(tree, { width, rows, env: ctx });
     const lines = drawFit(fit, { values, width, scripts: {}, ctx, lines: game ? game.lines : {} });
-    return signatureOf(lines, fit.clipped);
+    return signatureOf(lines, fit.clipped, spriteRows(fit.tree));
   };
 }
 
