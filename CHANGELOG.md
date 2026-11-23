@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draws the script's last output, up to 5 seconds old, instead of its default for that one
   render. The DOOM mugshot's default is the healthy face, so a skipped call made a hurt face
   blink healthy.
+- **The mugshot's learned health no longer resets when two sessions write it at once** (#56).
+  The account's health accumulator is written atomically, and a file that is there but cannot be
+  read or parsed at that moment (another session's write in flight) is left alone instead of
+  being overwritten with sums starting from zero; one that stays broken for a minute is replaced.
 
 ## [3.0.0] - 2026-11-23
 
