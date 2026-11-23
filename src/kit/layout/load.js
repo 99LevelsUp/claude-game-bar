@@ -19,7 +19,12 @@
 // warning: { key, cause, skin, element, subject, message }, causes:
 //   unreadable, parse-error, old-format, unknown-key, invalid-key, no-skin, no-root,
 //   no-kind, unknown-kind, unavailable, unknown-metric, type-mismatch, missing-child, cycle,
-//   unknown-param, invalid-param, bad-expression, room-outside-switch, jumping-param, bad-vars
+//   unknown-param, invalid-param, bad-expression, room-outside-switch, jumping-param, bad-vars,
+//   too-many-nodes
+//
+// An entry builds at most MAX_NODES nodes. References that fan out (an element placed several
+// times, each placing another several times) build a number of nodes that grows with the power of
+// the depth, all at once on the render daemon's one thread; an entry past the cap is skipped.
 //
 // A loaded skin file: { file, game, entries: { <name>: { name, root, vars } }, warnings }. A node:
 //   { id, path, kind, desc, metric, vars, params, children, places, cases }
@@ -43,6 +48,8 @@ import { compile, isComputed } from "./expr.js";
 import { checkVars } from "./vars.js";
 
 const TOP_KEYS = ["version", "game", "skin", "element"];
+// The most nodes one skin entry builds: the largest bundled entry (DOOM's tall bar) builds 145.
+export const MAX_NODES = 2000;
 const ENTRY_KEYS = ["root", "vars", "before"];
 // The parameters that name a line set.
 const LINE_PARAMS = new Set(["border", "lines", "selected_lines"]);
@@ -114,8 +121,12 @@ function buildFile(data, file, add) {
   const elements = isTable(data.element) ? data.element : {};
   if (Object.hasOwn(data, "element") && !isTable(data.element)) add("invalid-key", null, "element", `setting "element" must be a table of elements; ignored`);
 
+  // The nodes the entry being built has built so far; past MAX_NODES nothing more is built.
+  let built = 0;
+
   // Builds a node from its table. `ctx`: { id, path, ancestors } of the place it is built for.
   function buildTable(el, id, nodePath, ancestors) {
+    if (++built > MAX_NODES) return null;
     const kind = el.kind;
     if (typeof kind !== "string") { add("no-kind", id, null, "has no kind; skipped"); return null; }
     const desc = kindOf(kind);
@@ -323,9 +334,14 @@ function buildFile(data, file, add) {
         if (isTable(e.vars)) vars = e.vars;
       }
       let root = null;
+      built = 0;
       if (typeof e.root === "string") root = buildRef(e.root, null, { parentId: null, parentPath: "", ancestors: new Set() });
       else if (isTable(e.root)) root = buildTable(e.root, `${name}.root`, `${name}.root`, new Set());
       else add("no-root", null, `skin.${name}`, `skin "${name}" names no root; skipped`);
+      if (built > MAX_NODES) {
+        add("too-many-nodes", null, `skin.${name}`, `skin "${name}" places its elements more than ${MAX_NODES} times; skipped`);
+        continue;
+      }
       if (!root) {
         if (e.root !== undefined) add("no-root", null, `skin.${name}`, `skin "${name}" lost its root; skipped`);
         continue;
