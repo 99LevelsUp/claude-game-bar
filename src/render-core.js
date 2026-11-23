@@ -1,19 +1,22 @@
-// Render one session's bar. The skin selection (src/skin-select.js) names the skin; it is loaded,
-// fitted to the width and drawn (src/kit/skin/), with a warning line under it while any part of it
-// needs the user's attention. A skin that cannot be loaded gives way to the default game's default
-// skin, with a warning. The fit takes the terminal's width and height (rowsOf). The skin's scripts run through the runner the caller passes: src/render.js
-// passes the script pass (src/kit/skin/scripts.js) for the render daemon; the one-shot status line
-// (statusline.js), which runs no scripts, imports this module directly so it never loads the
-// script host.
+// Render one session's bar. The skin selection (src/skin-select.js) names the skin, an entry of a
+// game's skin file; it is loaded, its parameters resolved for this render's values, fitted to the
+// width and the row budget, and drawn (src/kit/layout/), with a warning line under it while any part
+// of it needs the user's attention. A skin that cannot be loaded (a file in the format before 3.0.0
+// among them) gives way to the default game's default skin, with a warning. The skin's scripts run
+// through the runner the caller passes: src/render.js passes the script pass
+// (src/kit/skin/scripts.js) for the render daemon; the one-shot status line (statusline.js), which
+// runs no scripts, imports this module directly so it never loads the script host.
 
 import path from "node:path";
 import { effectiveStep } from "./kit/raster/glyph-level.js";
-import { loadSkin } from "./kit/skin/load.js";
-import { fitSkin } from "./kit/skin/fit.js";
-import { drawFit } from "./kit/skin/draw.js";
+import { loadSkinFile, gameStyle } from "./kit/layout/load.js";
+import { resolveTree } from "./kit/layout/resolve.js";
+import { createScope } from "./kit/layout/vars.js";
+import { fitTree } from "./kit/layout/fit.js";
+import { drawFit } from "./kit/layout/draw.js";
 import { warningLine, memoryStore, makeWarning } from "./kit/skin/warnings.js";
 import { createAssetResolver, recordUsage } from "./platform/assets.js";
-import { chainGames } from "./skin-assets.js";
+import { entryGames, entryOf } from "./skin-assets.js";
 import { defaultGame } from "./games/index.js";
 import { selectSkin, findSkin } from "./skin-select.js";
 import { collectValues } from "./metrics/index.js";
@@ -48,9 +51,9 @@ const indentOf = (env) => Number(envGet("INDENT", env) ?? 2); // Claude Code dra
 const columnsOf = (env) => parseInt(env.COLUMNS || "100", 10);
 // The rows the bar may take: GAMEBAR_MAX_ROWS when set, else a third of the terminal's height
 // (LINES, which Claude Code sets before it runs the status line), else no limit, so a terminal that
-// gives no height draws as before. A skin taller than this goes down its smaller-skin chain. The
-// warning line under the bar does not count: it comes and goes, and the bar must not change skin
-// with it.
+// gives no height draws as before. A skin taller than this gives up rows, and its switch moves to a
+// lower alternative. The warning line under the bar does not count: it comes and goes, and the bar
+// must not change size with it.
 export function rowsOf(env) {
   const max = parseInt(envGet("MAX_ROWS", env) ?? "", 10);
   if (max > 0) return max;
@@ -81,77 +84,70 @@ export function renderSessionWith(runScripts, { data, env = process.env, now = D
   return renderSkin({ selected, data, env, now, warningStore, scripts, runScripts }) ?? [`gamebar: skin ${selected.name} cannot be drawn`];
 }
 
+// The skin's game style: its variables and line sets, each checked, from the game's manifest.
+const styles = new WeakMap();
+function styleOf(game) {
+  if (!game) return { vars: {}, lines: {}, warnings: [] };
+  if (!styles.has(game)) styles.set(game, gameStyle({ vars: game.vars, lines: game.lines }, game.manifest || null));
+  return styles.get(game);
+}
+
 // The selected skin, fitted, its scripts run and drawn, or null when nothing of it (nor of the
-// default skin) can be drawn. An element whose asset is missing draws its default, and the warning
-// line names the missing package (src/platform/assets.js).
+// default skin) can be drawn. A node whose asset is missing draws its default, and the warning line
+// names the missing package (src/platform/assets.js).
 function renderSkin({ selected, data, env, now, warningStore, scripts, runScripts }) {
-  // The folder each skin's own script paths are read from: a user skin's folder, a bundled skin's
-  // game folder.
-  const folders = new Map();
-  const note = (s) => {
-    if (s && s.file) folders.set(s.file, !s.user && s.game && s.game.dir ? s.game.dir : path.dirname(s.file));
-    return s;
-  };
-  note(selected);
-  // The default skin's file, looked up only when the selected skin has no file or does not load.
-  let fallbackFile;
-  const fallback = () => {
-    if (fallbackFile === undefined) fallbackFile = note(findSkin(defaultGame().defaultSkin, env))?.file || null;
-    return fallbackFile;
-  };
   const warnings = [...selected.warnings];
-  let file = selected.file;
-  if (!file) {
-    file = fallback();
-    // A skin a game's manifest names but whose file is missing draws the default skin.
-    if (file) {
-      warnings.push(makeWarning({ key: `selection|no-file|${selected.name}`, cause: "no-file", subject: selected.name,
-        message: `skin ${selected.name} has no file; drawing ${defaultGame().defaultSkin}` }));
-    }
+  let skin = selected;
+  let entry = entryOf(skin);
+  if (!entry) {
+    // A skin that has no file, does not load or is in the format before 3.0.0 draws the default
+    // game's default skin; the file's own warnings say why.
+    if (skin.file) warnings.push(...loadSkinFile(skin.file).warnings);
+    const fallback = findSkin(defaultGame().defaultSkin, env);
+    warnings.push(makeWarning({ key: `selection|no-entry|${selected.name}`, cause: "no-entry", subject: selected.name,
+      message: `skin ${selected.name} cannot be drawn; drawing ${fallback ? fallback.name : "nothing"}` }));
+    skin = fallback;
+    entry = entryOf(skin);
   }
-  if (!file) return null;
-  let loaded = loadSkin(file);
-  if (!loaded.skin && fallback() !== file) loaded = loadSkin(file, { fallback: fallback() });
-  if (!loaded.skin) return null;
-  warnings.push(...loaded.warnings);
+  if (!entry) return null;
+  warnings.push(...loadSkinFile(skin.file).warnings);
+  // The folder the skin's own script paths are read from: a user skin's folder, a bundled skin's
+  // game folder.
+  const folder = !skin.user && skin.game && skin.game.dir ? skin.game.dir : path.dirname(skin.file);
+  const game = skin.game;
+  const style = styleOf(game);
+  warnings.push(...style.warnings);
+
   const { values, reaction } = sessionValues(data, env, now);
   const width = Math.max(0, columnsOf(env) - indentOf(env));
-  const loadSmaller = (name) => {
-    const s = note(findSkin(name, env));
-    if (!s || !s.file) {
-      warnings.push(makeWarning({ key: `selection|smaller|${name}`, cause: "unknown-smaller", skin: loaded.skin.file,
-        subject: name, message: `no skin is called ${name} (the smaller skin of ${loaded.skin.name})` }));
-      return null;
-    }
-    const r = loadSkin(s.file);
-    warnings.push(...r.warnings);
-    return r.skin;
-  };
-  // What the fit measures with: each skin's assets found from its own folder, so an animation is
-  // sized by its frames. Lookups only: a missing package is installed and reported below.
-  const measureCtx = (skin) => ({
-    resolveAsset: createAssetResolver({ env, now: now * 1000, folder: folders.get(skin.file) ?? path.dirname(skin.file), install: () => {} }).resolve,
+  const tick = Math.floor(now);
+  const scope = createScope({ game: style.vars, skin: entry.vars, values, now, tick });
+  const root = resolveTree(entry.root, {
+    scope, values,
+    report: (w) => warnings.push(makeWarning({ key: [skin.file, w.path, w.cause, w.subject].join("|"), cause: w.cause, skin: skin.file,
+      element: w.element, subject: w.subject, message: `skin "${path.basename(skin.file)}", element "${w.element}": ${w.message}` })),
   });
-  const fitted = fitSkin(loaded.skin, { values, width, rows: rowsOf(env), loadSmaller, measureCtx });
-  warnings.push(...fitted.warnings);
-  // Assets come through the asset store: the drawn skin's own references from its folder, a game's
-  // from the checkout or the installed package. Every game the whole smaller chain uses is looked
-  // up now, so a missing package starts installing before a narrower terminal needs it.
-  const drawn = fitted.skin || loaded.skin;
-  const assets = createAssetResolver({ env, now: now * 1000, folder: folders.get(drawn.file) ?? path.dirname(drawn.file) });
-  for (const game of chainGames(loaded.skin, env)) assets.need(game);
-  const ctx = { tick: Math.floor(now), step: effectiveStep(env), resolveAsset: assets.resolve, reaction, now };
-  let fit = fitted, outputs = {};
+  // What the fit measures with: the skin's assets found from its folder, so a sprite is sized by its
+  // frames. Lookups only: a missing package is installed and reported below.
+  const measure = createAssetResolver({ env, now: now * 1000, folder, install: () => {} });
+  const step = effectiveStep(env);
+  const fit = fitTree(root, { width, rows: rowsOf(env), env: { resolveAsset: measure.resolve, step } });
+  // Assets come through the asset store: the skin's own references from its folder, a game's from
+  // the checkout or the installed package. Every game the whole tree uses is looked up now, so a
+  // missing package starts installing before a narrower terminal needs it.
+  const assets = createAssetResolver({ env, now: now * 1000, folder });
+  for (const g of entryGames(entry)) assets.need(g);
+  const ctx = { tick, step, resolveAsset: assets.resolve, reaction, now };
+  let outputs = {};
   if (scripts !== false) {
-    const run = runScripts(fitted, {
-      host: scripts.host, pass: scripts.pass, state: scripts.state, values, reaction, now, tick: ctx.tick,
-      folderOf: (skin) => folders.get(skin.file) ?? path.dirname(skin.file), resolveAsset: ctx.resolveAsset,
+    const run = runScripts(fit, {
+      file: skin.file, host: scripts.host, pass: scripts.pass, state: scripts.state, values, reaction, now, tick,
+      folder, resolveAsset: ctx.resolveAsset,
     });
-    fit = run.fit;
     outputs = run.scripts;
     warnings.push(...run.warnings);
   }
-  const lines = drawFit(fit, { values, width, ctx, scripts: outputs });
+  const lines = drawFit(fit, { values, width, ctx, scripts: outputs, lines: style.lines });
   warnings.push(...assets.warnings());
   recordUsage(selected.name, assets.packages(), { env, now: now * 1000 });
   const line = warningLine(warnings, { store: warningStore, now, width });

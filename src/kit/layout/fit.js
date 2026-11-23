@@ -79,7 +79,9 @@ export function fitTree(root, { width, rows, env = {} } = {}) {
     const p = r.p;
     let { min, nat, max = Infinity, rows: rw, minRows, step } = s;
     if (p.width !== null && p.width !== undefined) { nat = p.width; if (p.min_width === null) min = Math.min(min, nat); }
-    if (p.min_width !== null && p.min_width !== undefined) min = p.min_width;
+    // On a leaf min_width is its minimum; on a container, whose minimum comes from its children, it
+    // is a floor (a box never narrower than its title, say).
+    if (p.min_width !== null && p.min_width !== undefined) min = r.desc.container ? Math.max(min, p.min_width) : p.min_width;
     if (p.max_width !== null && p.max_width !== undefined) max = p.max_width;
     if (p.rows !== null && p.rows !== undefined) { rw = p.rows; if (p.min_rows === null) minRows = Math.min(minRows, rw); }
     if (p.min_rows !== null && p.min_rows !== undefined) minRows = p.min_rows;
@@ -190,19 +192,47 @@ export function fitTree(root, { width, rows, env = {} } = {}) {
       for (const k of activeKids(r)) walk(k, false);
     };
     walk(top, true);
-    const actions = [];
+    // Each box's plainer levels, the plainest last: a level gives up everything the levels before it
+    // give up (no title implies no padding), so a step that alone wins nothing is passed over.
+    const deco = [];
     for (const b of boxes) {
-      const levels = decoLevels(b.p);
-      const next = levels.find((l) => l > (b.deco || 0));
-      if (next !== undefined) actions.push({ apply: () => { b._prev = b.deco; b.deco = next; invalidate(b); }, revert: () => { b.deco = b._prev; invalidate(b); } });
+      for (const level of decoLevels(b.p).filter((l) => l > (b.deco || 0))) {
+        deco.push({ level, apply: () => { b._prev = b.deco; b.deco = level; invalidate(b); }, revert: () => { b.deco = b._prev; invalidate(b); } });
+      }
     }
+    deco.sort((a, b) => a.level - b.level);
     optional.sort((a, b) => a.p.priority - b.p.priority || cutDistance(a) - cutDistance(b) || b.depth - a.depth);
-    for (const o of optional) actions.push({ apply: () => { o.dropped = true; invalidate(o); }, revert: () => { o.dropped = false; invalidate(o); } });
+    const dropAll = (nodes) => ({
+      apply: () => { for (const o of nodes) { o.dropped = true; invalidate(o); } },
+      revert: () => { for (const o of nodes) { o.dropped = false; invalidate(o); } },
+    });
+    // Priority by priority: each optional node alone, then siblings of that priority together, for
+    // when only all of them win anything (the nine slots of a hotbar standing in the way of a row,
+    // hearts and hunger side by side).
+    const drops = [];
+    for (const prio of [...new Set(optional.map((o) => o.p.priority))]) {
+      const level = optional.filter((o) => o.p.priority === prio);
+      drops.push(...level.map((o) => dropAll([o])));
+      const groups = new Map();
+      for (const o of level) {
+        const key = o.parent ? o.parent.path : "";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(o);
+      }
+      drops.push(...[...groups.values()].filter((g) => g.length > 1).map(dropAll));
+    }
+    const inner = [];
     for (const s of switches.reverse()) {
       const next = nextCase(s, rootRoom);
-      if (next >= 0) actions.push({ apply: () => { s._prev = s.caseIdx; s.caseIdx = next; invalidate(s); }, revert: () => { s.caseIdx = s._prev; invalidate(s); } });
+      if (next >= 0) inner.push({ apply: () => { s._prev = s.caseIdx; s.caseIdx = next; invalidate(s); }, revert: () => { s.caseIdx = s._prev; invalidate(s); } });
     }
-    return actions;
+    return { deco, drops, inner };
+  }
+
+  // The steps of §8 in order, one action at a time, the first that lessens the overflow kept:
+  // decoration, drops, inner switches.
+  function trySteps({ deco, drops, inner }, measureFn) {
+    return tryActions(deco, measureFn) || tryActions(drops, measureFn) || tryActions(inner, measureFn);
   }
 
   // How far a node is from its list's cut end: 0 for the child that goes first.
@@ -243,13 +273,13 @@ export function fitTree(root, { width, rows, env = {} } = {}) {
         const centre = new Set(COLUMNS[1].map((pl) => r.places[pl]).filter(Boolean));
         for (const [k, kr] of rooms) {
           if (centre.has(k) || excess(k, kr, dim) === 0) continue;
-          if (tryActions(candidates(k, true), ex)) return true;
+          if (trySteps(candidates(k, true), ex)) return true;
         }
         if (dim === "w" && r.p.balance !== "free" && !r.centreGives) {
           if (tryActions([{ apply: () => { r.centreGives = true; invalidate(r); }, revert: () => { r.centreGives = false; invalidate(r); } }], ex)) return true;
         }
-        for (const k of centre) if (tryActions(candidates(k, true), ex)) return true;
-      } else if (tryActions(candidates(r, false), ex)) return true;
+        for (const k of centre) if (trySteps(candidates(k, true), ex)) return true;
+      } else if (trySteps(candidates(r, false), ex)) return true;
     }
     if (r.kind === "switch") {
       const next = nextCase(r, room);

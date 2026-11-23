@@ -14,18 +14,19 @@
 // clock is fixed, and the mugshot is drawn at the richest glyph step from its default frame.
 
 import { findSkin } from "../src/skin-select.js";
-import { loadSkin } from "../src/kit/skin/load.js";
-import { fitSkin } from "../src/kit/skin/fit.js";
-import { drawFit } from "../src/kit/skin/draw.js";
+import { entryOf } from "../src/skin-assets.js";
+import { resolveTree } from "../src/kit/layout/resolve.js";
+import { createScope } from "../src/kit/layout/vars.js";
+import { fitTree } from "../src/kit/layout/fit.js";
+import { drawFit } from "../src/kit/layout/draw.js";
 import { createAssetResolver } from "../src/platform/assets.js";
 import { vlen } from "../src/kit/text.js";
 
 export const WIDTH_FROM = 40;
 export const WIDTH_TO = 250;
 export const ROW_BUDGETS = [1, 2, 3, 4, 5, 6, 7, 8];
-// The skins a user can still choose by name after the skin redesign; the others are reached as
-// their fallbacks.
-export const ENTRIES = { doom: "doom-full", "doom-line": "doom-line", minecraft: "minecraft" };
+// The ledger files and the skin entries they record.
+export const ENTRIES = { doom: "doom", "doom-line": "doom-line", minecraft: "minecraft" };
 
 const NOW = 1793500000;
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g, "");
@@ -78,21 +79,19 @@ export function signatureOf(lines, clipped) {
 // The values every drawing is made with.
 export function drawWith(values) {
   const assetsFor = new Map();
-  const loadSmaller = (name) => {
-    const s = findSkin(name);
-    return s && s.file ? loadSkin(s.file).skin : null;
-  };
   // One drawing of the skin named `name` at `width` columns and at most `rows` rows.
   return function draw(name, width, rows) {
     const selected = findSkin(name);
-    const folder = selected.game ? selected.game.dir : undefined;
+    const game = selected.game;
+    const folder = game ? game.dir : undefined;
     if (!assetsFor.has(folder)) assetsFor.set(folder, createAssetResolver({ folder }));
     const assets = assetsFor.get(folder);
-    const fit = fitSkin(loadSkin(selected.file).skin, {
-      values, width, rows, loadSmaller,
-      measureCtx: () => ({ resolveAsset: assets.resolve }),
-    });
-    const lines = drawFit(fit, { values, width, scripts: {}, ctx: { tick: 0, step: "octant", resolveAsset: assets.resolve, reaction: null, now: NOW } });
+    const entry = entryOf(selected);
+    const scope = createScope({ game: game ? game.vars : {}, skin: entry.vars, values, now: NOW, tick: 0 });
+    const tree = resolveTree(entry.root, { scope, values });
+    const ctx = { tick: 0, step: "octant", resolveAsset: assets.resolve, reaction: null, now: NOW };
+    const fit = fitTree(tree, { width, rows, env: ctx });
+    const lines = drawFit(fit, { values, width, scripts: {}, ctx, lines: game ? game.lines : {} });
     return signatureOf(lines, fit.clipped);
   };
 }

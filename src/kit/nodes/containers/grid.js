@@ -144,19 +144,19 @@ export const gridKind = define({
 });
 
 // The cells a grid's script selects: one index, or a list of indices or child ids (§3.4, KTD8).
-// Indices count the grid's children in the order the skin writes them; a dropped child selects
-// nothing.
+// An index counts the cells drawn, the `children` the script was given; an id names a child, and a
+// child that is not drawn selects nothing.
 export function selectedCells(r, pl, selected) {
   const out = new Set();
   if (selected === null || selected === undefined) return out;
   const list = Array.isArray(selected) ? selected : [selected];
   const shown = pl.kids.map((k) => k.r);
   for (const s of list) {
-    let child = null;
-    if (Number.isInteger(s) && s >= 0 && s < r.kids.length) child = r.kids[s];
-    else if (typeof s === "string") child = r.kids.find((k) => k.id === s) || null;
-    const i = child ? shown.indexOf(child) : -1;
-    if (i >= 0) out.add(i);
+    if (Number.isInteger(s) && s >= 0 && s < shown.length) out.add(s);
+    else if (typeof s === "string") {
+      const i = shown.findIndex((k) => k.id === s);
+      if (i >= 0) out.add(i);
+    }
   }
   return out;
 }

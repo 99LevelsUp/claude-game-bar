@@ -1,0 +1,37 @@
+# The default game's skin: one row with the basics, in this order: 🤖 the model name, the effort
+# moon, the thinking, speed and output icons, 🧠 the context bar and percentage, 🕔 the 5h bar and
+# its reset, 📅 the 7d bar and its reset, 📁 the folder, and a CPU core equalizer.
+#
+# As the terminal narrows everything shrinks first; then the CPU columns go, then the folder, then
+# the 5h group. The model, the context and the 7d limit stay.
+version = 2
+game = "default"
+
+[skin.default]
+root = "bar"
+
+[element.bar]
+kind = "list"
+direction = "horizontal"
+gap = 2
+children = [
+  { kind = "list", gap = 1, children = [
+      { kind = "text", metric = "model.name", icon = "🤖", width = 12, min_width = 6 },
+      { kind = "state", metric = "model.effort" },
+      { kind = "state", metric = "model.mode" },
+      { kind = "state", metric = "model.style", other = "🎨" } ] },
+  { kind = "list", gap = 1, empty_when = "= not has($context.hp)", children = [
+      { kind = "label", text = "🧠" },
+      { kind = "bar", metric = "context.hp", label = "none", width = 8, min_width = 3 },
+      { kind = "number", metric = "context.hp", color = "$threshold" } ] },
+  { kind = "list", gap = 1, priority = 3, empty_when = "= not has($ratelimit.5h)", children = [
+      { kind = "label", text = "🕔" },
+      { kind = "bar", metric = "ratelimit.5h", label = "none", width = 6, min_width = 3 },
+      { kind = "text", metric = "usage.reset5h" } ] },
+  { kind = "list", gap = 1, empty_when = "= not has($ratelimit.7d)", children = [
+      { kind = "label", text = "📅" },
+      { kind = "bar", metric = "ratelimit.7d", label = "none", width = 6, min_width = 3 },
+      { kind = "text", metric = "usage.reset7d" } ] },
+  { kind = "text", metric = "loc.cwd", icon = "📁", width = 16, min_width = 6, priority = 2 },
+  { kind = "columns", metric = "sys.cores", fit = "as_many_as_fit", priority = 1 },
+]

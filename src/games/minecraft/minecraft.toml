@@ -1,0 +1,117 @@
+# The Minecraft game's skin: the in-game survival screen (docs/ideation/2026-11-20-skin-component-
+# system.md §11.2). A chat on the left plays conversations about the session (no tokens); in the
+# middle of the terminal ♥ hearts (what is left of the 5h limit) and 🍖 hunger (what is left of the
+# context), the XP bar (the 7-day limit, its level the percentage) and a 9-slot hotbar of session
+# stats. The highlighted slot jumps to what just happened, then wanders.
+#
+# As the terminal narrows the chat goes first, then the hotbar's slots from the right, all slots
+# always equally wide; the hearts, hunger and XP bar go last.
+version = 2
+game = "minecraft"
+
+[skin.minecraft]
+root = "bar"
+
+# The HUD exactly in the middle; the chat at the terminal's left edge, in the left half.
+[element.bar]
+kind = "anchor"
+balance = "mirror"
+gravity = "out"
+left = "chat"
+center = "hud"
+
+# The platform's questions and answers about the metrics, in Minecraft's words where its library
+# has them (the library runs in the render daemon; the one-shot status line plays the platform's).
+[element.chat]
+kind = "chat"
+libraries = ["minecraft:conversations/minecraft.js"]
+width = 40
+min_width = 18
+rows = 6
+priority = 1
+
+[element.hud]
+kind = "list"
+direction = "vertical"
+cross = "stretch"
+children = ["status", "xp", "hotbar"]
+
+# Hearts on the left, hunger on the right.
+[element.status]
+kind = "list"
+align = "between"
+children = ["hearts", "hunger"]
+
+# A heart is one column, a shank of hunger two: a space between the hearts gives both rows of ten
+# about the same length. A session without a 5h limit (an API key, or before the first answer) has
+# every heart.
+[element.hearts]
+kind = "meter"
+metric = "ratelimit.5h"
+count = 10
+glyph = "♥"
+empty_glyph = "♡"
+color = "#ff3b3b"
+empty_color = "#c07070"
+gap = 1
+invert = true
+empty = "full"
+priority = 3
+
+[element.hunger]
+kind = "meter"
+metric = "context.hp"
+count = 10
+glyph = "🍖"
+empty_glyph = "🦴"
+invert = true
+from = "end"
+priority = 3
+
+# A session without a 7-day limit has an empty XP bar at level 0.
+[element.xp]
+kind = "bar"
+metric = "ratelimit.7d"
+label = "middle"
+fill_glyph = "━"
+partials = ""
+empty_glyph = "━"
+color = "#80ff20"
+empty_color = "#1f3a12"
+track = "none"
+min_width = 20
+empty = "zero"
+priority = 3
+
+# Nine equal cells that shrink together. The highlight script knows the slots of the errors, the
+# lines added and the tasks by these ids.
+[element.hotbar]
+kind = "grid"
+lines = "heavy"
+line_color = "#8b8b8b"
+selected_color = "#ffffff"
+fill = "#262626"
+script = "minecraft:scripts/hotbar-highlight.js"
+children = [{ kind = "repeat", template = "slot", items = [
+  { id = "slot-window", item = "🪓", metric = "model.window" },
+  { id = "slot-cost", item = "💎", metric = "cost.total" },
+  { id = "slot-changes", item = "🌿", metric = "git.status" },
+  { id = "slot-added", item = "🧱", metric = "loc.added" },
+  { id = "slot-agents", item = "🐺", metric = "act.agents" },
+  { id = "slot-tasks", item = "🏆", metric = "act.tasks" },
+  { id = "slot-errors", item = "💥", metric = "act.errors" },
+  { id = "slot-cpu", item = "🔥", metric = "sys.cpu" },
+  { id = "slot-clock", item = "🕓", metric = "sys.clock" },
+] }]
+
+# A slot: its item over its "stack count", centred in its cell. Every slot has the same priority, so
+# at a narrow width they go from the hotbar's cut end, the right.
+[element.slot]
+kind = "list"
+direction = "vertical"
+cross = "center"
+priority = 2
+children = [
+  { kind = "label", text = "{item}" },
+  { kind = "text", metric = "{metric}", color = "#ffffff", align = "center", overflow = "clip", width = 7, min_width = 5 },
+]

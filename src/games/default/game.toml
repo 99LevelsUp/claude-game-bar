@@ -1,0 +1,15 @@
+# The default game: what the bar draws when no game is installed or chosen (docs/ideation/2026-11-20-
+# skin-component-system.md §11.3). It ships inside the bar and needs no asset package, so it draws
+# offline from the first run. Its skin is the entry of default.toml.
+name = "default"
+description = "one row: the model, the context, both limits, the folder and the CPU"
+# The game drawn when nothing is chosen.
+default = true
+default_skin = "default"
+
+[vars]
+text = "#b6bac8"
+good = "#60c868"
+warn = "#e0b840"
+bad = "#e05440"
+threshold = ["$good", "$warn", "$bad"]

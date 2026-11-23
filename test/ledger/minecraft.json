@@ -4,7 +4,7 @@
    "from": 40,
    "to": 250,
    "signature": {
-    "rows": 3,
+    "rows": 1,
     "left": [],
     "right": [],
     "mugshot": null,
@@ -18,7 +18,7 @@
    "from": 40,
    "to": 250,
    "signature": {
-    "rows": 3,
+    "rows": 2,
     "left": [],
     "right": [],
     "mugshot": null,
@@ -30,6 +30,18 @@
  "3": [
   {
    "from": 40,
+   "to": 74,
+   "signature": {
+    "rows": 2,
+    "left": [],
+    "right": [],
+    "mugshot": null,
+    "slots": null,
+    "clipped": false
+   }
+  },
+  {
+   "from": 75,
    "to": 250,
    "signature": {
     "rows": 3,
@@ -44,9 +56,21 @@
  "4": [
   {
    "from": 40,
+   "to": 74,
+   "signature": {
+    "rows": 2,
+    "left": [],
+    "right": [],
+    "mugshot": null,
+    "slots": null,
+    "clipped": false
+   }
+  },
+  {
+   "from": 75,
    "to": 250,
    "signature": {
-    "rows": 3,
+    "rows": 4,
     "left": [],
     "right": [],
     "mugshot": null,
@@ -58,9 +82,21 @@
  "5": [
   {
    "from": 40,
+   "to": 74,
+   "signature": {
+    "rows": 2,
+    "left": [],
+    "right": [],
+    "mugshot": null,
+    "slots": null,
+    "clipped": false
+   }
+  },
+  {
+   "from": 75,
    "to": 250,
    "signature": {
-    "rows": 3,
+    "rows": 5,
     "left": [],
     "right": [],
     "mugshot": null,

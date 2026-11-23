@@ -1,60 +1,59 @@
-// Scripts in the render pass: after the fit (src/kit/skin/fit.js), every drawn element that names a
+// Scripts in the render pass: after the fit (src/kit/layout/fit.js), every drawn node that names a
 // script is run, all of a session's scripts in one batch through the script host
-// (src/platform/scripts/host.js), and what they return changes how those elements look before they
-// are drawn (src/kit/skin/draw.js). A script never changes an element's size: every element is
-// drawn at the columns and rows the fit gave it, and what a script makes wider is cut there.
+// (src/platform/scripts/host.js), and what they return changes how those nodes look before they are
+// drawn (src/kit/layout/draw.js). A script never changes a node's size: every node is drawn at the
+// columns and rows the fit gave it, and what a script makes wider is cut there.
+//
+// A node is known by its placement path (`bar/tall/left-side/usage`): an element placed in several
+// places (a switch's cases share their boxes) has its own state and output in each. Scripts see
+// the element ids of their children, so a script finds a slot by the id the skin gives it.
 //
 // Where a script comes from. A path the skin writes is read from the skin's own folder (a user
-// skin's folder, a bundled skin's game folder); one that leads outside it is refused with a
-// warning and never run. A reference to a game's asset (`<game>:<path>`) is found by the render
-// context's resolveAsset; while it cannot be found the element draws its default, and the missing
-// asset is the asset store's to report.
+// skin's folder, a bundled skin's game folder); one that leads outside it is refused with a warning
+// and never run. A reference to a game's asset (`<game>:<path>`) is found by the render context's
+// resolveAsset; while it cannot be found the node draws its default, and the missing asset is the
+// asset store's to report.
 //
 // What a script gets, as the argument of its `render(input)`:
-//   value     its element's metric value, raw as the catalogue gives it (null without a metric, and
+//   value     its node's metric value, raw as the catalogue gives it (null without a metric, and
 //             null while the session does not report it)
-//   standIn   null while the value is the metric's own; "empty" or "full" while the session does not
-//             report the metric and the element draws a stand-in in its place (its `when_absent`,
-//             src/kit/skin/draw.js)
+//   standIn   null while the value is the metric's own; "zero" or "full" while the session does not
+//             report the metric and the node draws a stand-in in its place (its `empty`)
 //   metric    the metric id, or null
-//   params    its element's parameters, as the skin set them
+//   params    its node's parameters for this render
 //   reaction  the session's game-neutral reaction (src/metrics/reaction.js); it travels as JSON,
 //             so an age that is Infinity arrives as null
 //   now       the time in seconds; `tick` the render tick
-//   width     the columns the fit gave the element; `rows` its rows
+//   width     the columns the fit gave the node; `rows` its rows
 //   children  a container's drawn children: [{ id, metric, value, standIn, width }], in order
-//   state     what the script returned as `state` the last time it ran for this element in this
+//   state     what the script returned as `state` the last time it ran for this node in this
 //             session ({} the first time, and again whenever the skin or the script changes)
 //
 // What it returns (anything else is ignored):
-//   frame     the frame an animation draws, by name
-//   selected  the index of the child a grid selects, among `children`
+//   frame     the frame a sprite draws, by name
+//   selected  the cells a grid selects: one index among `children`, or a list of indices or ids
 //   params    parameters drawn instead of the skin's this render: characters, colours, icons. A
-//             value the element's visual does not accept keeps the skin's. On a container they
-//             change its frame, except any that would change the frame's size.
+//             value the node's kind does not accept keeps the skin's
 //   state     kept for the next run (it is the only way back: the input reaches the script as a
 //             copy)
 //
-// A chat's conversation libraries (src/kit/elements/chat.js) run in the same batch: each library's
-// `conversations(facts)` gets the session's facts (src/kit/chat/metrics-library.js), and what the
-// libraries return reaches the chat as `conversations`, in the order the skin names them. A library
-// that fails is left out of the chat, with a warning naming it.
+// A chat's conversation libraries run in the same batch: each library's `conversations(facts)` gets
+// the session's facts (src/kit/chat/metrics-library.js), and what the libraries return reaches the
+// chat as `conversations`, in the order the skin names them. A library that fails is left out of the
+// chat, with a warning naming it.
 //
-// A script that throws leaves its element on its default visual and puts a warning under the bar,
-// and the host keeps it off until its file or its skin changes. A script that runs past its budget
-// does the same, but the host keeps it off only for a cooldown (30 s, doubling while it keeps
-// running late, up to 10 min) and then tries it again; the warning says so, under the same key, so
-// a retry that runs late again does not show it anew. When the pass has no time left for a session,
-// that session's elements draw their defaults for this render only: no warning, nothing turned off.
+// A script that throws leaves its node on its default look and puts a warning under the bar, and
+// the host keeps it off until its file or its skin changes. A script that runs past its budget does
+// the same, but the host keeps it off only for a cooldown (30 s, doubling while it keeps running
+// late, up to 10 min) and then tries it again; the warning says so, under the same key, so a retry
+// that runs late again does not show it anew. When the pass has no time left for a session, that
+// session's nodes draw their defaults for this render only: no warning, nothing turned off.
 
 import path from "node:path";
-import { vlen } from "../text.js";
-import { clipLine, metricValue } from "./draw.js";
-import { blank } from "../elements/paint.js";
 import { createScriptHost, stamp as stampOf, CALL_BUDGET_MS } from "../../platform/scripts/host.js";
 import { GAME_PREFIX, leadsOutside } from "../../platform/assets.js";
 import { facts } from "../chat/metrics-library.js";
-import { makeWarning } from "./warnings.js";
+import { makeWarning } from "../warning.js";
 import { isPlainObject } from "../is.js";
 
 export { CALL_BUDGET_MS };
@@ -83,141 +82,90 @@ export function resolveScript(ref, folder, resolveAsset) {
   return { file };
 }
 
-// Lines of an element drawn by a visual whose parameters a script changed: exactly `width` columns
-// and `height` rows, whatever the parameters made of them.
-function fitted(lines, width, height) {
-  const out = lines.slice(0, height).map((l) => {
-    const w = vlen(l);
-    return w > width ? clipLine(l, width) : w < width ? l + blank(width - w) : l;
-  });
-  while (out.length < height) out.push(blank(width));
-  return out;
-}
-
-// `given` laid over `own`, each value checked by `descriptor`; one it refuses keeps `own`'s.
-function overParams(descriptor, own, given) {
-  const { params, problems } = descriptor.validate({ ...own, ...given });
-  const out = { ...params };
-  for (const p of problems) if (Object.hasOwn(own, p.param)) out[p.param] = own[p.param];
-  return Object.freeze(out);
-}
-
-const sameExtra = (a, b) => a.columns === b.columns && a.rows === b.rows;
-
-function withParams(t, given) {
-  const { node } = t;
-  if (!node.container) {
-    const desc = node.descriptor;
-    const descriptor = Object.freeze({ ...desc, draw: (a) => fitted(desc.draw(a), a.width, a.height) });
-    return Object.freeze({ ...node, descriptor, params: overParams(desc, node.params, given) });
-  }
-  const f = node.frame;
-  if (!f) return node;
-  const params = overParams(f.descriptor, f.params, given);
-  const n = t.children.length;
-  if (!sameExtra(f.descriptor.extra(params, n), f.descriptor.extra(f.params, n))) return node;
-  return Object.freeze({ ...node, frame: Object.freeze({ ...f, params }) });
-}
-
-// The fitted tree with the nodes in `nodes` (fitted node -> replacement) swapped in.
-function rebuild(t, nodes) {
-  const children = t.children.map((k) => rebuild(k, nodes));
-  const node = nodes.get(t) ?? t.node;
-  if (node === t.node && children.every((k, i) => k === t.children[i])) return t;
-  return Object.freeze({ ...t, node, children: Object.freeze(children) });
-}
-
 // Why each failed script failed, by its warning's key, for as long as this process lives.
 const reasons = new Map();
 
 // A cooldown as the warning says it: "30 s", "2 min".
 const duration = (ms) => (ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`);
 
-// The conversation libraries a drawn element names (a chat's), or none.
-const librariesOf = (node) => (!node.container && typeof node.descriptor.libraries === "function" ? node.descriptor.libraries(node.params) : []);
+// The conversation libraries a drawn node names (a chat's), or none.
+const librariesOf = (r) => (typeof r.desc.libraries === "function" ? r.desc.libraries(r.p) || [] : []);
 
-const valueOf = (node, values) => (node.metric !== null && Object.hasOwn(values, node.metric) ? values[node.metric] : null);
-const standInOf = (node, values) => (node.container ? null : metricValue(node, values).standIn);
+const valueOf = (r) => (r.standIn || r.mode === "blank" || r.value === undefined ? null : r.value);
 
-// Runs the scripts of the drawn elements of `fit` and returns what to draw:
-//   { fit, scripts, warnings }
-//   fit       `fit`, with the elements whose parameters a script changed swapped in (`fit` itself
-//             when no script changed any)
-//   scripts   element id -> what its script returned, for drawFit
+// Runs the scripts of the drawn nodes of `fit` and returns what to draw:
+//   { scripts, warnings }
+//   scripts   placement path -> what its script returned, for drawFit
 //   warnings  in the loader's form: { key, cause, skin, element, subject, message }
 // options:
+//   file          the skin file, which names the scripts' warnings and keys their state
 //   host          the script host; by default one shared by this process
 //   pass          the pass the time comes from (createScriptPass); by default one of this render's own
 //   state         this session's script state: a Map the caller keeps between renders
 //   values, reaction, now, tick   the session's render
-//   folderOf(skin)  the folder the skin's own script paths are read from; by default its file's
-//   resolveAsset    finds a game asset's file, or null
-export function runScripts(fit, { host, pass = createScriptPass(), state = new Map(), values = {}, reaction = null, now = 0, tick = 0,
-  folderOf = (skin) => path.dirname(skin.file || "."), resolveAsset = null } = {}) {
+//   folder        the folder the skin's own script paths are read from; by default its file's
+//   resolveAsset  finds a game asset's file, or null
+export function runScripts(fit, { file = null, host, pass = createScriptPass(), state = new Map(), values = {}, reaction = null, now = 0, tick = 0,
+  folder = path.dirname(file || "."), resolveAsset = null } = {}) {
   const warnings = [];
-  const skin = fit.skin;
-  const elements = [], talkers = [];
-  const walk = (t) => {
-    if (typeof t.node.script === "string" && t.node.script !== "") elements.push(t);
-    if (librariesOf(t.node).length) talkers.push(t);
-    t.children.forEach(walk);
+  const nodes = [], talkers = [];
+  const walk = (pl) => {
+    if (typeof pl.r.p.script === "string" && pl.r.p.script !== "") nodes.push(pl);
+    if (librariesOf(pl.r).length) talkers.push(pl);
+    pl.kids.forEach(walk);
   };
   if (fit.tree) walk(fit.tree);
-  if (!elements.length && !talkers.length) return { fit, scripts: {}, warnings };
+  if (!nodes.length && !talkers.length) return { scripts: {}, warnings };
 
-  const skinKey = `${skin.file}@${stampOf(skin.file)}`;
-  const folder = folderOf(skin);
-  const warn = (t, cause, subject, message) => warnings.push(makeWarning({
-    key: [skin.file, t.id, cause, subject].join("|"), cause, skin: skin.file, element: t.id, subject, message,
+  const skinKey = `${file}@${stampOf(file)}`;
+  const warn = (pl, cause, subject, message) => warnings.push(makeWarning({
+    key: [file, pl.r.path, cause, subject].join("|"), cause, skin: file, element: pl.r.id, subject, message,
   }));
-  // The file of `t`'s script `ref` (a `what`), or null; one outside the skin's folder is refused.
-  const fileOf = (t, ref, what) => {
+  // The file of a script `ref` (a `what`), or null; one outside the skin's folder is refused.
+  const fileOf = (pl, ref, what) => {
     const where = resolveScript(ref, folder, resolveAsset);
-    if (where.outside) warn(t, "script-outside", ref, `${t.id}: ${what} ${ref} is outside the skin's folder; not run`);
+    if (where.outside) warn(pl, "script-outside", ref, `${pl.r.id}: ${what} ${ref} is outside the skin's folder; not run`);
     return where.file ?? null;
   };
 
   const calls = [], runs = [];
-  for (const t of elements) {
-    const ref = t.node.script;
-    const file = fileOf(t, ref, "script");
-    if (!file) continue;
-    const stamp = `${skinKey}|${file}@${stampOf(file)}`;
-    const kept = state.get(t.id);
+  for (const pl of nodes) {
+    const ref = pl.r.p.script;
+    const scriptFile = fileOf(pl, ref, "script");
+    if (!scriptFile) continue;
+    const stamp = `${skinKey}|${scriptFile}@${stampOf(scriptFile)}`;
+    const kept = state.get(pl.r.path);
     const own = kept && kept.stamp === stamp ? kept.state : {};
-    runs.push({ t, ref, file, stamp });
+    runs.push({ pl, ref, file: scriptFile, stamp });
     calls.push({
-      script: file, skin: skinKey,
+      script: scriptFile, skin: skinKey,
       input: {
-        value: valueOf(t.node, values), standIn: standInOf(t.node, values), metric: t.node.metric, params: t.node.params,
-        reaction, now, tick, width: t.width, rows: t.rows,
-        children: t.children.map((k) => ({
-          id: k.id, metric: k.node.metric, value: valueOf(k.node, values), standIn: standInOf(k.node, values), width: k.width,
-        })),
+        value: valueOf(pl.r), standIn: pl.r.standIn ?? null, metric: pl.r.metric, params: pl.r.p,
+        reaction, now, tick, width: pl.w, rows: pl.h,
+        children: pl.kids.map((k) => ({ id: k.r.id, metric: k.r.metric, value: valueOf(k.r), standIn: k.r.standIn ?? null, width: k.w })),
         state: own,
       },
     });
   }
   // The conversation libraries of the drawn chats, in the same batch: each gets the session's facts.
   let known = null;
-  for (const t of talkers) {
-    for (const ref of librariesOf(t.node)) {
-      const file = fileOf(t, ref, "conversation library");
-      if (!file) continue;
-      runs.push({ t, ref, file, library: true });
-      calls.push({ script: file, skin: skinKey, fn: "conversations", input: (known ??= facts(values)) });
+  for (const pl of talkers) {
+    for (const ref of librariesOf(pl.r)) {
+      const libFile = fileOf(pl, ref, "conversation library");
+      if (!libFile) continue;
+      runs.push({ pl, ref, file: libFile, library: true });
+      calls.push({ script: libFile, skin: skinKey, fn: "conversations", input: (known ??= facts(values)) });
     }
   }
 
   const scripts = {};
   const heard = new Map();
-  const nodes = new Map();
   if (calls.length) {
     const left = pass.left();
     let results = calls.map(() => ({ status: "skipped" }));
     if (left > 0) {
       const started = performance.now();
-      // A host that throws costs this pass its scripts, nothing more: every element draws its
+      // A host that throws costs this pass its scripts, nothing more: every node draws its
       // default, nothing is turned off and the bar is still drawn.
       try {
         results = (host ?? sharedScriptHost()).runBatch(calls, { deadlineMs: Math.min(left, pass.callBudgetMs * calls.length) });
@@ -227,32 +175,31 @@ export function runScripts(fit, { host, pass = createScriptPass(), state = new M
         pass.spend(performance.now() - started);
       }
     }
-    results.forEach((r, i) => {
-      const { t, ref, file, stamp, library } = runs[i];
-      if (r.status === "ok" && library) {
-        if (isPlainObject(r.output)) heard.set(t, [...(heard.get(t) ?? []), r.output]);
-      } else if (r.status === "ok") {
-        const out = isPlainObject(r.output) ? r.output : {};
-        scripts[t.id] = out;
-        if (isPlainObject(out.params)) nodes.set(t, withParams(t, out.params));
-        if (Object.hasOwn(out, "state")) state.set(t.id, { stamp, state: isPlainObject(out.state) ? out.state : {} });
-      } else if (r.status !== "skipped") {
-        const msg = String(r.message || "").replace(`${file}: `, "");
+    results.forEach((res, i) => {
+      const { pl, ref, file: f, stamp, library } = runs[i];
+      if (res.status === "ok" && library) {
+        if (isPlainObject(res.output)) heard.set(pl, [...(heard.get(pl) ?? []), res.output]);
+      } else if (res.status === "ok") {
+        const out = isPlainObject(res.output) ? res.output : {};
+        scripts[pl.r.path] = out;
+        if (Object.hasOwn(out, "state")) state.set(pl.r.path, { stamp, state: isPlainObject(out.state) ? out.state : {} });
+      } else if (res.status !== "skipped") {
+        const msg = String(res.message || "").replace(`${f}: `, "");
         const without = library ? "the chat plays without it" : "drawn without it";
         // A timeout turns the script off for a while only (the host's cooldown); anything else
         // until its file or skin changes.
-        const why = r.status === "timeout"
-          ? `${msg}; ${without}${Number.isFinite(r.retryMs) ? ` for ${duration(r.retryMs)}` : ""}, then ${library ? "the library is " : ""}retried`
-          : `${r.status === "error" ? `failed: ${msg}` : msg}; ${without}`;
-        const key = [skin.file, t.id, "script-failed", ref].join("|");
+        const why = res.status === "timeout"
+          ? `${msg}; ${without}${Number.isFinite(res.retryMs) ? ` for ${duration(res.retryMs)}` : ""}, then ${library ? "the library is " : ""}retried`
+          : `${res.status === "error" ? `failed: ${msg}` : msg}; ${without}`;
+        const key = [file, pl.r.path, "script-failed", ref].join("|");
         // Once the host has turned the script off it only says so; the warning keeps naming why.
-        if (r.status !== "disabled") reasons.set(key, why);
-        warn(t, "script-failed", ref, library
-          ? `${t.id}: conversation library ${ref} ${reasons.get(key) ?? why}`
-          : `${t.id}: script ${ref} ${reasons.get(key) ?? why}`);
+        if (res.status !== "disabled") reasons.set(key, why);
+        warn(pl, "script-failed", ref, library
+          ? `${pl.r.id}: conversation library ${ref} ${reasons.get(key) ?? why}`
+          : `${pl.r.id}: script ${ref} ${reasons.get(key) ?? why}`);
       }
     });
   }
-  for (const t of talkers) scripts[t.id] = { ...(scripts[t.id] ?? {}), conversations: heard.get(t) ?? [] };
-  return { fit: nodes.size ? { ...fit, tree: rebuild(fit.tree, nodes) } : fit, scripts, warnings };
+  for (const pl of talkers) scripts[pl.r.path] = { ...(scripts[pl.r.path] ?? {}), conversations: heard.get(pl) ?? [] };
+  return { scripts, warnings };
 }

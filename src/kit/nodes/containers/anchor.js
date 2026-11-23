@@ -59,8 +59,11 @@ export const anchorKind = define({
   measure(r, ctx) {
     const { cols: [L, C, R], rows } = tracks(r, ctx);
     const mirror = r.p.balance !== "free";
-    const min = mirror ? C.min + 2 * Math.max(L.min, R.min) : L.min + C.min + R.min;
-    const nat = mirror ? C.nat + 2 * Math.max(L.nat, R.nat) : L.nat + C.nat + R.nat;
+    // Mirrored, each side gets half of what the centre leaves, the odd column going to the right:
+    // the left needs twice its width, the right one column less than twice its own.
+    const sides = (l, rt) => Math.max(2 * l, 2 * rt - 1, 0);
+    const min = mirror ? C.min + sides(L.min, R.min) : L.min + C.min + R.min;
+    const nat = mirror ? C.nat + sides(L.nat, R.nat) : L.nat + C.nat + R.nat;
     if (!Object.values(r.places).some((k) => ctx.size(k))) return ZERO;
     return { min, nat, max: Infinity, rows: sum(rows.map((x) => x.rows)), minRows: sum(rows.map((x) => x.minRows)) };
   },
@@ -90,7 +93,10 @@ export const anchorKind = define({
       const ci = COLUMNS.findIndex((c) => c.includes(pl));
       const cw = widths[ci], th = heights[t];
       const kw = k.p.grow > 0 ? Math.max(s.min, Math.min(cw, s.max)) : Math.max(Math.min(s.nat, cw), Math.min(s.min, cw));
-      const kh = Math.max(Math.min(s.rows, th), Math.min(s.minRows, th));
+      // A list that stretches its children across stretches itself across its row too, so the
+      // boxes beside a centre are as tall as the bar.
+      const stretch = (k.kind === "list" || k.kind === "box") && k.p.cross === "stretch" && k.p.direction !== "vertical";
+      const kh = stretch ? th : Math.max(Math.min(s.rows, th), Math.min(s.minRows, th));
       kids.push([k, { w: kw, h: kh }]);
       at[pl] = { column: ci, track: t };
     }));
