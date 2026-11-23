@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 // The game registry (src/games/index.js): a game is a folder with a manifest (game.toml) and its
-// skins, found by the registry itself.
+// skin file (<name>.toml, its skins as entries), found by the registry itself.
 //
-// The fixture game in ./fixture-game is a manifest and one skin, data only. This test reads the
-// folder into a registry entry, adds it to the registry's list and renders it through
+// The fixture game in ./fixture-game is a manifest and one skin file, data only. This test reads
+// the folder into a registry entry, adds it to the registry's list and renders it through
 // renderSession, the same call the one-shot status line and the render daemon make: nothing outside
-// the fixture's folder is needed. It also pins the production list (themes cycle doom -> minecraft
-// -> doom, the old minecraft-hud name still resolves, every manifest is complete, every game draws
-// only its skins), and the preset paths written before skins and before the presets moved into
-// their games.
+// the fixture's folder is needed. It also pins the production list (the built-in default game, then
+// doom and minecraft; the old minecraft-hud name still resolves; every manifest is complete; every
+// game draws only its skins), the old skin names and the preset paths written before skins.
 
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -34,11 +33,11 @@ const USER_DIR = path.join(SB, "user");
 Object.assign(process.env, { ...sandboxEnv(TMPDIR), PATH: "", GAMEBAR_MSYS_REAP: "0", GAMEBAR_RATELIMITS_SHARE: "0", GAMEBAR_USER_DIR: USER_DIR });
 for (const k of ["WT_SESSION", "TERM_PROGRAM", "TERM", "TMUX", "VTE_VERSION", "GAMEBAR_GLYPHS", "GAMEBAR_THEME", "GAMEBAR_PRESET", "GAMEBAR_SKIN"]) delete process.env[k];
 
-const { GAMES, readGame, defaultGame, gameNames, skinName } = await import("../../src/games/index.js");
+const { GAMES, readGame, defaultGame, gameNames } = await import("../../src/games/index.js");
 const { THEME_NAMES, nextTheme, resolveTheme, currentTheme } = await import("../../src/theme.js");
 const { renderSession } = await import("../../src/render.js");
-const { selectSkin } = await import("../../src/skin-select.js");
-const { buildSkin } = await import("../../src/kit/skin/load.js");
+const { selectSkin, findSkin } = await import("../../src/skin-select.js");
+const { loadSkinFile } = await import("../../src/kit/layout/load.js");
 
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g, "");
 const NOW = 1793500000.123;
@@ -71,40 +70,44 @@ try {
   render(session("warmup")); // the first render has no earlier CPU sample to diff against
 
   // The production list.
-  ok(GAMES.map((g) => g.name).join(",") === "doom,minecraft", "the registry lists doom, then minecraft");
-  ok(THEME_NAMES.join(",") === "doom,minecraft", "the theme names follow the registry's order");
-  ok(nextTheme("doom") === "minecraft" && nextTheme("minecraft") === "doom", "theme next cycles doom -> minecraft -> doom");
+  ok(GAMES.map((g) => g.name).join(",") === "default,doom,minecraft", "the registry lists default, doom, then minecraft");
+  ok(THEME_NAMES.join(",") === "default,doom,minecraft", "the theme names follow the registry's order");
+  ok(nextTheme("default") === "doom" && nextTheme("doom") === "minecraft" && nextTheme("minecraft") === "default", "theme next cycles default -> doom -> minecraft -> default");
   ok(resolveTheme("minecraft-hud") === "minecraft", "the old name minecraft-hud still resolves to minecraft");
   ok(resolveTheme("satisfactory") === null, "a name no game registers resolves to nothing");
-  ok(gameNames().join(",") === "doom,minecraft,minecraft-hud", "the registry's names are the games and their older theme names");
-  ok(GAMES.filter((g) => g.default).length === 1 && defaultGame().name === "doom", "exactly one game is the default: doom");
+  ok(gameNames().join(",") === "default,doom,minecraft,minecraft-hud", "the registry's names are the games and their older theme names");
+  ok(GAMES.filter((g) => g.default).length === 1 && defaultGame().name === "default", "exactly one game is the default: the built-in default game");
   for (const g of GAMES) {
     const dir = path.join(ROOT, "src", "games", g.name);
     const manifest = parseToml(readFileSync(path.join(dir, "game.toml"), "utf8"));
     ok(manifest.name === g.name && g.dir === dir && g.description.length > 0, `${g.name}: read from src/games/${g.name}/game.toml`);
-    ok(g.skins.some((s) => s.name === g.defaultSkin) && Object.values(g.presetSkins).every((n) => g.skins.some((s) => s.name === n)),
-      `${g.name}: its default skin and the skin of each preset are among its skins (${g.skins.map((s) => s.name).join(", ")})`);
-    ok(g.assets && g.assets.package === `@claude-game-bar/${g.name}` && typeof g.assets.version === "string"
-      && typeof g.assets.integrity === "string", `${g.name}: its asset package is @claude-game-bar/${g.name}, pinned`);
-    const files = Object.values(g.presets);
-    ok(files.length > 0 && files.every((f) => inside(dir, f)) && Object.keys(g.presets).every((n) => Object.hasOwn(g.presetSkins, n)),
-      `${g.name}: each preset it names has its place inside src/games/${g.name}`);
-    ok(g.skins.every((s) => s.file && existsSync(s.file)) && files.every((f) => !existsSync(f)) && Object.hasOwn(g.presets, g.defaultPreset),
-      `${g.name}: it draws only its skins, every one a file, and ships no presets`);
-    ok(!("layout" in g) && !("layoutKey" in g), `${g.name}: its entry names no layout`);
+    ok(g.skins.some((s) => s.name === g.defaultSkin) && Object.values(g.presetSkins).every((n) => findSkin(n) && findSkin(n).game === g),
+      `${g.name}: its default skin is among its skins, and each preset's skin name selects one of them (${g.skins.map((s) => s.name).join(", ")})`);
+    if (g.name === "default") {
+      ok(g.assets === null, "default: it needs no asset package");
+    } else {
+      ok(g.assets && g.assets.package === `@claude-game-bar/${g.name}` && typeof g.assets.version === "string"
+        && typeof g.assets.integrity === "string", `${g.name}: its asset package is @claude-game-bar/${g.name}, pinned`);
+    }
+    ok(g.skins.every((s) => s.file === path.join(dir, `${g.name}.toml`)) && loadSkinFile(path.join(dir, `${g.name}.toml`)).warnings.length === 0,
+      `${g.name}: its skins are the entries of src/games/${g.name}/${g.name}.toml, which loads without a warning`);
+    ok(Object.values(g.presets).every((f) => inside(dir, f) && !existsSync(f)), `${g.name}: it ships no presets`);
+    ok(Object.entries(g.legacySkins).every(([, to]) => g.skins.some((s) => s.name === to)), `${g.name}: every old skin name maps to one of its entries`);
   }
   ok(GAMES.find((g) => g.name === "doom").readsPresets && !GAMES.find((g) => g.name === "minecraft").readsPresets,
     "doom reads the preset setting, minecraft does not");
 
-  // A skin chosen by the session draws what the legacy preset setting of its size draws.
+  // An old skin name draws what its entry draws; the preset setting of a size draws the same.
   {
     const s = session("by-name");
     const doom = GAMES.find((g) => g.name === "doom");
-    for (const size of ["full", "standard", "minimal"]) {
+    for (const [size, entry] of [["full", "doom"], ["standard", "doom"], ["minimal", "doom-minimal"]]) {
       const skin = doom.presetSkins[size];
-      ok(render(s, { GAMEBAR_SKIN: skin }) === render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: doom.presets[size] }),
-        `GAMEBAR_SKIN=${skin} draws what doom's ${size} preset setting draws`);
+      ok(render(s, { GAMEBAR_SKIN: skin }) === render(s, { GAMEBAR_SKIN: entry })
+        && render(s, { GAMEBAR_SKIN: skin }) === render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: doom.presets[size] }),
+        `GAMEBAR_SKIN=${skin} draws the entry ${entry}, as doom's ${size} preset setting does`);
     }
+    ok(render(s, { GAMEBAR_SKIN: "minecraft-compact" }) === render(s, { GAMEBAR_SKIN: "minecraft" }), "GAMEBAR_SKIN=minecraft-compact draws the minecraft skin");
     ok(render(s, { GAMEBAR_SKIN: "minecraft", GAMEBAR_THEME: "doom" }) === render(s, { GAMEBAR_THEME: "minecraft" }),
       "GAMEBAR_SKIN=minecraft draws the minecraft skin, whatever the theme");
   }
@@ -112,12 +115,11 @@ try {
   // The fixture game: its own folder, data only, and it renders through renderSession.
   {
     const files = readdirSync(FIXTURE_DIR, { recursive: true }).map((f) => f.replace(/\\/g, "/")).sort();
-    ok(files.join(",") === "game.toml,skins,skins/fixture.toml", `the fixture game is a manifest and one skin (${files.join(", ")})`);
+    ok(files.join(",") === "fixture.toml,game.toml", `the fixture game is a manifest and one skin file (${files.join(", ")})`);
     const FIXTURE_GAME = readGame(FIXTURE_DIR);
     ok(FIXTURE_GAME.skins.length === 1 && inside(FIXTURE_DIR, FIXTURE_GAME.skins[0].file) && !("layout" in FIXTURE_GAME),
       "its entry names only a skin from its own folder, and no layout");
-    const skinFile = FIXTURE_GAME.skins[0].file;
-    ok(buildSkin(parseToml(readFileSync(skinFile, "utf8")), skinFile).warnings.length === 0, "its skin loads without a warning");
+    ok(loadSkinFile(FIXTURE_GAME.skins[0].file).warnings.length === 0, "its skin loads without a warning");
     const s = session("fixture");
     const drawn = (over) => strip(render(s, over)).trim();
     const want = "FIXTURE Opus 5.5";
@@ -131,11 +133,11 @@ try {
         "a game that reads no presets is not swayed by GAMEBAR_PRESET");
       ok(currentTheme({ GAMEBAR_THEME: "fixture" }) === "fixture", "the current theme can be the registered game");
     });
-    ok(GAMES.map((g) => g.name).join(",") === "doom,minecraft", "taking the entry out leaves the production list as it was");
+    ok(GAMES.map((g) => g.name).join(",") === "default,doom,minecraft", "taking the entry out leaves the production list as it was");
     ok(render(s, { GAMEBAR_THEME: "doom" }).includes("MODEL"), "with the fixture gone, doom draws its boxes again");
   }
 
-  // A skin a manifest names but whose file is missing: the default skin is drawn, and a line under
+  // A skin a manifest names but whose file is missing: the default game is drawn, and a line under
   // the bar names the missing skin.
   {
     const dir = path.join(SB, "ghost-game");
@@ -144,38 +146,9 @@ try {
     const s = session("ghost");
     withGame(readGame(dir), () => {
       const lines = strip(render(s, { GAMEBAR_SKIN: "ghost" })).split("\n");
-      ok(lines[0].includes("MODEL") && lines.at(-1).trim().startsWith("gamebar:") && lines.at(-1).includes("ghost"),
-        `GAMEBAR_SKIN=ghost, a skin without a file, draws doom-full with a line naming ghost (${lines.at(-1).trim()})`);
+      ok(lines[0].includes("🤖") && !lines[0].includes("MODEL") && lines.at(-1).trim().startsWith("gamebar:") && lines.at(-1).includes("ghost"),
+        `GAMEBAR_SKIN=ghost, a skin without a file, draws the default game with a line naming ghost (${lines.at(-1).trim()})`);
     });
-  }
-
-  // A bundled skin's name is read without parsing the whole file: the same name a full parse gives
-  // (its `name` when that is a non-empty string, else the file name), for every skin file the
-  // repository has and for the ways a name can be written.
-  {
-    const nameByParse = (file) => {
-      let name = null;
-      try { name = parseToml(readFileSync(file, "utf8")).name; } catch { /* the file name */ }
-      return typeof name === "string" && name ? name : path.basename(file, ".toml");
-    };
-    const tomls = (dir) => readdirSync(dir, { recursive: true }).map((f) => path.join(dir, f))
-      .filter((f) => f.endsWith(".toml") && path.basename(path.dirname(f)) === "skins");
-    const odd = path.join(SB, "odd-skins", "skins");
-    mkdirSync(odd, { recursive: true });
-    const written = {
-      "escaped.toml": 'version = 1\nname = "a \\"quoted\\" name"\n[element.bar]\nkind = "row"\n',
-      "literal.toml": "version = 1\nname = 'literal-name' # a comment\n",
-      "quoted-key.toml": '"name" = "quoted-key"\n',
-      "crlf.toml": '# a comment\r\nname = "crlf-name"\r\n[element.bar]\r\nkind = "row"\r\n',
-      "in-table.toml": 'version = 1\n[element.bar]\nname = "not-the-skin"\n',
-      "empty.toml": 'name = ""\n',
-      "number.toml": "name = 3\n",
-      "multiline.toml": 'description = """\n[not a table]\nname = "inside"\n"""\nname = "after-multiline"\n',
-    };
-    for (const [f, text] of Object.entries(written)) writeFileSync(path.join(odd, f), text);
-    const files = [...tomls(path.join(ROOT, "src", "games")), ...tomls(path.join(ROOT, "test")), ...tomls(odd)];
-    const differ = files.filter((f) => skinName(f) !== nameByParse(f)).map((f) => `${path.relative(ROOT, f)}: ${skinName(f)} != ${nameByParse(f)}`);
-    ok(files.length >= 20 && differ.length === 0, `every skin's name is the one a full parse gives (${files.length} files${differ.length ? `; ${differ.join("; ")}` : ""})`);
   }
 
   // A game whose manifest has no [legacy] table (no presets at all) is all a new game needs: the
@@ -188,7 +161,6 @@ try {
     GAMES.push(entry);
     let theme = null, threw = null;
     try {
-      // A fresh copy of the theme module, evaluated while the game is in the shared registry.
       theme = await import(new URL("../../src/theme.js?no-legacy", import.meta.url).href);
     } catch (e) { threw = e; } finally { GAMES.splice(GAMES.indexOf(entry), 1); }
     ok(!threw && entry.defaultPreset === null, `loading the theme module with it registered does not throw${threw ? ` (${threw.message})` : ""}`);
@@ -205,14 +177,11 @@ try {
     ok(minecraft.includes("━") && !minecraft.includes("MODEL"), "the minecraft theme draws the hotbar");
     for (const preset of [path.join(ROOT, "src", "games", "minecraft", "presets", "minecraft.toml"), path.join(ROOT, "presets", "minecraft.toml")]) {
       const env = { ...s.env, ...over, GAMEBAR_THEME: "doom", GAMEBAR_PRESET: preset };
-      // The warning names the whole path; the line under the bar may cut a long checkout path at the
-      // terminal's width, so the selection's own warning is checked for the name and the render for
-      // the line.
       const sel = selectSkin(env);
       const lines = render(s, env).split("\n");
-      ok(sel.name === "doom-full" && sel.warnings.some((w) => w.message.includes(preset) && w.message.includes("doom-full"))
+      ok(sel.name === "doom" && sel.warnings.some((w) => w.message.includes(preset) && w.message.includes("doom"))
         && strip(lines[0]).includes("MODEL") && strip(lines.at(-1)).trim().startsWith("gamebar:"),
-        `theme doom with ${path.relative(ROOT, preset)} in GAMEBAR_PRESET draws doom-full and names the preset`);
+        `theme doom with ${path.relative(ROOT, preset)} in GAMEBAR_PRESET draws doom and names the preset`);
     }
     ok(render(s, { ...over, GAMEBAR_THEME: "minecraft", GAMEBAR_PRESET: path.join(DOOM_PRESETS, "full.toml") }) === minecraft,
       "theme minecraft ignores a DOOM preset in GAMEBAR_PRESET");
@@ -222,17 +191,16 @@ try {
   {
     ok(!existsSync(path.join(ROOT, "presets")) && !existsSync(path.join(ROOT, "src", "games", "minecraft", "presets")),
       "no preset files are shipped, in the old folder or a game's");
-    // DOOM's presets are gone; their file names still pick the size of a DOOM skin, from the old
-    // folder and the later one alike.
     const oldFull = path.join(ROOT, "presets", "full.toml");
     const s = session("old-path");
     for (const cols of ["250", "120", "90"]) {
       const viaOld = render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: oldFull, COLUMNS: cols });
       const viaNew = render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: path.join(DOOM_PRESETS, "full.toml"), COLUMNS: cols });
-      ok(viaOld === viaNew && viaOld === render(s, { GAMEBAR_SKIN: "doom-full", COLUMNS: cols }) && viaOld.includes("MODEL"),
-        `at ${cols} columns the old path draws doom-full`);
+      ok(viaOld === viaNew && viaOld === render(s, { GAMEBAR_SKIN: "doom", COLUMNS: cols }) && viaOld.includes("MODEL"),
+        `at ${cols} columns the old path draws doom`);
     }
-    // At 80 columns doom-full does not fit and goes down its smaller-skin chain to doom-minimal.
+    // At 80 columns the tall bar does not fit and the switch draws the balanced bar, which is also
+    // what doom-minimal draws there.
     ok(render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: oldFull, COLUMNS: "80" }) === render(s, { GAMEBAR_SKIN: "doom-minimal", COLUMNS: "80" }),
       "at 80 columns it draws what doom-minimal draws");
   }

@@ -14,7 +14,10 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
 
-const names = [...new Set([...gameNames(), ...bundledSkins().map((s) => s.name)])];
+// The built-in game is called "default", a word the general part uses for its own meanings; it is
+// found by its manifest's flag, never by its name, so its name is left out of the scan.
+const BUILT_IN = "default";
+const names = [...new Set([...gameNames(), ...bundledSkins().map((s) => s.name)])].filter((n) => n !== BUILT_IN);
 ok(gameNames().length > 0, `the registry finds the games in their folders (${names.join(", ")})`);
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const quoted = new RegExp(`["'\`](${names.map(esc).join("|")})["'\`]`);
