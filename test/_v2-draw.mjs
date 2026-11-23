@@ -36,7 +36,7 @@ export function drawEntry(nameOrSkin, { width = 200, rows = Infinity, values = R
   const assets = createAssetResolver({ folder });
   const warnings = [];
   const root = resolveTree(entry.root, {
-    scope: createScope({ game: game ? game.vars : {}, skin: entry.vars, values, now, tick: 0 }), values,
+    scope: createScope({ game: game ? game.vars : {}, skin: entry.vars, values, now, tick }), values,
     report: (w) => warnings.push(w),
   });
   const ctx = { tick, step, resolveAsset: assets.resolve, reaction, now };

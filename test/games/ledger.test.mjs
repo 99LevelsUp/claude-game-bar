@@ -41,7 +41,7 @@ console.log("the signature reads what a user sees:");
 {
   const esc = "\x1b[1m";
   const sig = signatureOf([`${esc}  MODEL  \u{1CD00}\u{1CD01} ACTIVITY`, "┃ a ┃ b ┃"], false);
-  ok(sig.rows === 2 && sig.mugshot === 9 && same(sig.left, ["MODEL"]) && same(sig.right, ["ACTIVITY"]) && sig.slots === 2,
+  ok(sig.rows === 2 && sig.mugshot === 9 && sig.face === 1 && same(sig.left, ["MODEL"]) && same(sig.right, ["ACTIVITY"]) && sig.slots === 2,
     `titles split at the mugshot, slots counted (${JSON.stringify(sig)})`);
 }
 

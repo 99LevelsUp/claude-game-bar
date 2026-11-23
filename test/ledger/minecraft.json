@@ -8,6 +8,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -22,6 +23,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -36,6 +38,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -48,6 +51,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -62,6 +66,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -74,6 +79,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -88,6 +94,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -100,6 +107,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": null,
     "clipped": false
    }
@@ -114,6 +122,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 6,
     "clipped": false
    }
@@ -126,6 +135,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 7,
     "clipped": false
    }
@@ -138,6 +148,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 8,
     "clipped": false
    }
@@ -150,6 +161,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 9,
     "clipped": false
    }
@@ -164,6 +176,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 6,
     "clipped": false
    }
@@ -176,6 +189,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 7,
     "clipped": false
    }
@@ -188,6 +202,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 8,
     "clipped": false
    }
@@ -200,6 +215,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 9,
     "clipped": false
    }
@@ -214,6 +230,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 6,
     "clipped": false
    }
@@ -226,6 +243,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 7,
     "clipped": false
    }
@@ -238,6 +256,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 8,
     "clipped": false
    }
@@ -250,6 +269,7 @@
     "left": [],
     "right": [],
     "mugshot": null,
+    "face": null,
     "slots": 9,
     "clipped": false
    }

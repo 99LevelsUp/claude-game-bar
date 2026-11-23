@@ -78,13 +78,16 @@ export function rowsOf(env) {
 //                            state kept between renders
 // `runScripts` is the script pass (runScripts of src/kit/skin/scripts.js); null when `scripts` is
 // false.
-export function renderSessionWith(runScripts, { data, env = process.env, now = Date.now() / 1000, warningStore = processStore, scripts = {} }) {
+//
+// `session`, { values, reaction }, draws those instead of what the payload gives: tests draw a fixed
+// session through the whole render (test/games/render-parity.test.mjs).
+export function renderSessionWith(runScripts, { data, env = process.env, now = Date.now() / 1000, warningStore = processStore, scripts = {}, session = null }) {
   // A shallow copy: the rate-limit merge in collectValues rewrites data.rate_limits, and a caller
   // that keeps the payload between renders must not see it change.
   if (isPlainObject(data)) data = { ...data };
 
   const selected = selectSkin(env);
-  const draw = (skin) => renderSkin({ selected: skin, data, env, now, warningStore, scripts, runScripts }) ?? [`gamebar: skin ${skin.name} cannot be drawn`];
+  const draw = (skin) => renderSkin({ selected: skin, data, env, now, warningStore, scripts, runScripts, session }) ?? [`gamebar: skin ${skin.name} cannot be drawn`];
   try {
     return draw(selected);
   } catch (err) {
@@ -111,7 +114,7 @@ function styleOf(game) {
 // The selected skin, fitted, its scripts run and drawn, or null when nothing of it (nor of the
 // default skin) can be drawn. A node whose asset is missing draws its default, and the warning line
 // names the missing package (src/platform/assets.js).
-function renderSkin({ selected, data, env, now, warningStore, scripts, runScripts }) {
+function renderSkin({ selected, data, env, now, warningStore, scripts, runScripts, session = null }) {
   const warnings = [...selected.warnings];
   let skin = selected;
   let entry = entryOf(skin);
@@ -135,7 +138,7 @@ function renderSkin({ selected, data, env, now, warningStore, scripts, runScript
   const style = styleOf(game);
   warnings.push(...style.warnings);
 
-  const { values, reaction } = sessionValues(data, env, now);
+  const { values, reaction } = session ?? sessionValues(data, env, now);
   const width = Math.max(0, columnsOf(env) - indentOf(env));
   const tick = Math.floor(now);
   const scope = createScope({ game: style.vars, skin: entry.vars, values, now, tick });
