@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A box without a border places its title by `title_align`** (#106). The title was always
   drawn at the start of the box; the DOOM panel titles are now centred, as their skin asks.
+- **The offline bar keeps black black** (#103). Its greys now follow each colour's own
+  brightness, dimmed by one factor (0.75), instead of squeezing every colour into the band 48 to
+  168: the face's black background stays black, white becomes 191, and the bar still reads as
+  switched off.
 
 ## [3.0.0] - 2026-11-23
 

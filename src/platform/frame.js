@@ -24,14 +24,15 @@ import { writeAtomic } from "./runtime.js";
 
 export const FRAME_VERSION = 1;
 
-// Grey palette: colour luminance squeezed into a dim band, so the stale bar keeps its shape
-// and contrast but reads as switched off.
-const GREY_LO = 48;
-const GREY_HI = 168;
+// Grey palette: each colour becomes the grey of its own luminance, dimmed by one factor, so the
+// stale bar keeps its shape and contrast, black stays black (the face's background), and the
+// whole bar reads as switched off.
+const GREY_DIM = 0.75;
 const greyOf = ([r, g, b]) => {
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return Math.round(GREY_LO + (Math.min(255, Math.max(0, lum)) * (GREY_HI - GREY_LO)) / 255);
+  return Math.round(Math.min(255, Math.max(0, lum)) * GREY_DIM);
 };
+const GREY_HI = greyOf([255, 255, 255]);
 
 export const OFFLINE_MARKER = `${RESET}${sgrFg([GREY_HI, GREY_HI, GREY_HI])} OFFLINE${RESET}`;
 
