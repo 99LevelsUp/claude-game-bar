@@ -55,7 +55,7 @@ src/                  the platform, and the game data that ships with it
                       the game-neutral reaction
   kit/                drawing: layout/ (skin loader, variables, expressions, resolve, fit, draw),
                       nodes/ (containers and visuals), skin/ (script pass, warning line), the chat
-                      library, colours, the glyph raster
+                      library, the ANSI escapes, the glyph raster
   install/            settings, the statusLine command, daemons, the old package, the emoji font
   games/              the registry (index.js) and one data folder per game:
     <game>/game.toml  the manifest

@@ -16,7 +16,7 @@ Layers under `src/`:
 - entry files with stable paths: `hook.js`, `statusline.js`, `daemon.js`, `gamebar-client.sh` (and the shim `doombar-client.sh`), plus `render-core.js` (the shared render), `render.js` (`renderSession`, the render with skin scripts), `skin-select.js` (which skin a session draws), `skin-assets.js`, `theme.js` and `package-root.js`;
 - `platform/`: runtime directory and file names, settings from the environment (`GAMEBAR_*` with `DOOMBAR_*` fallbacks), journal, daemon supervision, sweep, reaper, git and MSYS snapshots, the frame file, the asset store (`assets.js`) and the script worker (`scripts/`);
 - `metrics/`: the metric catalogue (each metric's value type), raw metric values, the bounded formatters (`format.js`) and the game-neutral reaction;
-- `kit/`: drawing primitives, `layout/` (skin loader, variables, expressions, resolve, fit, draw), `nodes/` (containers and visuals), `skin/` (script pass, warning line), the chat's metrics library, colours and the glyph raster;
+- `kit/`: drawing primitives, `layout/` (skin loader, variables, expressions, resolve, fit, draw), `nodes/` (containers and visuals), `skin/` (script pass, warning line), the chat's metrics library, the ANSI escapes and the glyph raster;
 - `install/`: settings, the statusLine command, daemons, the old package, the emoji font;
 - `games/`: the registry (`games/index.js`) and one data folder per game (`game.toml` and `<game>.toml`, its skins as entries):
   - `default/`: the built-in one-row game, drawn when nothing is chosen;
