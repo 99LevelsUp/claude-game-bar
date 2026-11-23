@@ -161,7 +161,8 @@ draws. A `text` or `number` of a formatted type (`percent`, `count`, `money`, `d
 (`src/metrics/format.js`), so a value never moves the bar.
 
 **Fitting.** When the bar does not fit the terminal's width or its row budget (`GAMEBAR_MAX_ROWS`,
-else a third of the terminal's rows), every node first shrinks toward its minimum; then, at the
+else a third of the terminal's rows), every node first shrinks toward its minimum (in a list, the
+children with `grow` first, so a bar narrows before the value beside it takes its short form); then, at the
 smallest container that overflows: decoration goes, optional nodes are dropped (lowest priority
 first, from the cut end), inner switches take their next case, and only then does the enclosing
 switch move on. If even the last case does not fit, it is drawn cut at the edge.

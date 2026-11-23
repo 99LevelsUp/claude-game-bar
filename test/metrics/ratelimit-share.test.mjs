@@ -57,8 +57,42 @@ try {
     "GAMEBAR_RATELIMITS_SHARE=0 keeps each chat's own numbers");
   ok(level(render("idle", { five_hour: w(30, W - 3600), seven_day: w(12) }, { DOOMBAR_RATELIMITS_SHARE: "0" })) === "12",
     "the old name, DOOMBAR_RATELIMITS_SHARE=0, still keeps each chat's own numbers");
+
+  // The account's usage reset by hand: the busy chat's reading drops inside the same window.
+  ok(level(render("busy", { five_hour: w(2, W - 3600), seven_day: w(1) })) === "1", "after a reset the busy chat shows its new 1, not the pool's 16");
+  ok(level(render("idle", { five_hour: w(30, W - 3600), seven_day: w(12) })) === "1", "the idle chat, its 12 unchanged, shows 1 too");
+  ok(level(render("new", null)) === "1", "and a chat with no limits of its own shows 1");
+  ok(level(render("busy", { five_hour: w(3, W - 3600), seven_day: w(2) })) === "2", "usage rising again after the reset shows");
+  ok(level(render("late", { five_hour: w(60, W - 7200), seven_day: w(95) })) === "2",
+    "a chat first seen with an older 5-hour window brings stale numbers: its 95 does not win");
 } finally {
   rmSync(tmp, { recursive: true, force: true });
+}
+
+// The case that showed it on the owner's machine: a pool written before readings carried `at`
+// holds 100 % for the week, and after the reset the sessions report 0, 95 (a chat idle since an
+// older 5-hour window), 1 and 1.
+const live = mkdtempSync(path.join(os.tmpdir(), "gamebar-rl-live-"));
+try {
+  const env = { ...process.env, GAMEBAR_THEME: "minecraft", COLUMNS: "120",
+    GAMEBAR_RATELIMITS: path.join(live, "shared.json"), GAMEBAR_STATE: path.join(live, "state.json"),
+    ...sandboxEnv(live), GAMEBAR_MSYS_REAP: "0" };
+  delete env.GAMEBAR_RATELIMITS_SHARE;
+  writeFileSync(path.join(live, "shared.json"), JSON.stringify({ five_hour: w(4, W - 3600), seven_day: w(100) }));
+  const render = (sid, rl) => strip(execFileSync(process.execPath, [path.join(ROOT, "src", "statusline.js")], {
+    env, encoding: "utf8",
+    input: JSON.stringify({ session_id: sid, cwd: live, model: { display_name: "Opus 5.5" }, ...(rl ? { rate_limits: rl } : {}) }),
+  }));
+  const level = (out) => (/━ (\d+) ━/.exec(out) || [])[1];
+  const sessions = [["s1", w(4, W - 3600), w(1)], ["s2", w(2, W - 3600), w(0)], ["s3", w(67, W - 7 * 3600), w(95)], ["s4", w(4, W - 3600), w(1)]];
+  const seen = [];
+  for (let pass = 0; pass < 3; pass++) for (const [sid, f, s] of sessions) seen.push(level(render(sid, { five_hour: f, seven_day: s })));
+  ok(seen.every((x) => x === "1"), `every session shows the week at 1, from the first render on (${seen.join(" ")})`);
+  const pool = JSON.parse(readFileSync(path.join(live, "shared.json"), "utf8"));
+  ok(pool.seven_day.used_percentage === 1 && Object.keys(pool.sessions).length === 4 && !JSON.stringify(pool).includes("s1"),
+    "the pool keeps 1 and one record per session, under a hash of its id");
+} finally {
+  rmSync(live, { recursive: true, force: true });
 }
 
 // The pool a release before 1.0.0 kept, mugshot_ratelimits_global.json in the old runtime

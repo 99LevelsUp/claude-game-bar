@@ -20,7 +20,7 @@ export function collectValues(data, env, now) {
   // (see syncRateLimits; the account comes from src/platform/account.js). A brand-new chat that
   // hasn't called the API yet gets them too. GAMEBAR_RATELIMITS_SHARE=0 turns it off.
   if (envGet("RATELIMITS_SHARE", env) !== "0") {
-    try { data.rate_limits = syncRateLimits(data.rate_limits, env); } catch { /* keep the session's own */ }
+    try { data.rate_limits = syncRateLimits(data.rate_limits, env, data.session_id); } catch { /* keep the session's own */ }
     if (!Object.keys(data.rate_limits || {}).length) delete data.rate_limits;
   }
   const st = mergeDiskTasks(loadState(data, env), readDiskTasks(tasksDir(data.session_id, env)));

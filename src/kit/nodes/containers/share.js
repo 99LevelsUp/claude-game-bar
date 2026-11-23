@@ -1,8 +1,10 @@
 // Sharing room among children along one axis (§8 step 1 and §3.2).
 //
-// Each child is { min, nat, max, grow, step }. When the room is short of the natural sizes, every
-// child shrinks toward its minimum by the same share of its own range; a stepped child rounds down
-// to a whole step; columns left over go one by one to the earliest children that can take them.
+// Each child is { min, nat, max, grow, step }. When the room is short of the natural sizes, the
+// children with `grow` give it first, down to their minimum, and only then do the others shrink:
+// a bar narrows before the value beside it takes its short form. Within each group every child
+// shrinks toward its minimum by the same share of its own range; a stepped child rounds down to a
+// whole step; columns left over go one by one to the earliest children that can take them.
 // When there is room to spare, children with `grow` take it by weight, each up to its `max`.
 
 export const sum = (xs) => xs.reduce((a, b) => a + b, 0);
@@ -41,6 +43,32 @@ export function share(kids, room) {
     }
     return out;
   }
+  const min = sum(kids.map((k) => k.min));
+  if (room <= min) return kids.map((k) => k.min);
+  const flex = kids.map((k) => k.grow > 0);
+  if (flex.some(Boolean) && flex.some((f) => !f)) {
+    const group = (want) => kids.map((k, i) => ({ k, i })).filter(({ i }) => flex[i] === want);
+    const growers = group(true), others = group(false);
+    const othersNat = sum(others.map(({ k }) => k.nat));
+    const growersMin = sum(growers.map(({ k }) => k.min));
+    const out = new Array(kids.length);
+    const place = (members, sizes) => sizes.forEach((v, j) => { out[members[j].i] = v; });
+    if (room - othersNat >= growersMin) {
+      place(others, others.map(({ k }) => k.nat));
+      place(growers, shrink(growers.map(({ k }) => k), room - othersNat));
+    } else {
+      place(growers, growers.map(({ k }) => k.min));
+      place(others, shrink(others.map(({ k }) => k), room - growersMin));
+    }
+    return out;
+  }
+  return shrink(kids, room);
+}
+
+// Every child toward its minimum by the same share of its range (see above).
+function shrink(kids, room) {
+  const nat = sum(kids.map((k) => k.nat));
+  if (room >= nat) return kids.map((k) => k.nat);
   const min = sum(kids.map((k) => k.min));
   if (room <= min) return kids.map((k) => k.min);
   const t = (room - min) / (nat - min);

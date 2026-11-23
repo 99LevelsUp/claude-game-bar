@@ -1,6 +1,7 @@
 // Rate limits: the rate-based mugshot health, and the account-wide rate limits pooled across
 // sessions.
 
+import { createHash } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runtimeDir, writeAtomic, readLearned, oldStateFile, FILE_PREFIX, OLD_FILE_PREFIX } from "../platform/runtime.js";
@@ -115,9 +116,14 @@ export function rateHealthValue(data, env = process.env) {
 // bar) while another chat was already at 16%. So every render pools what it sees into one
 // shared file and renders the freshest reading any session has seen.
 //
-// "Freshest" needs no timestamps: a window is identified by its resets_at, and within one
-// window used_percentage only ever rises. So per window: a later resets_at wins (a new window
-// started), the same resets_at takes the higher percentage, an earlier one is stale.
+// A window is identified by its resets_at. Per window: a later resets_at wins (a new window
+// started), an earlier one is stale. Within one window usage only rises, EXCEPT when the account's
+// usage is reset by hand (the user's admin grants it back): the percentage then drops while
+// resets_at stays. So each reading carries `at`, when the session that reported it last saw its
+// own reading change (a session's reading changes only when it talks to the API), and within one
+// window the reading that changed last wins; without `at` on either side, the higher one does.
+// A session whose 5-hour window is older than the pool's has not talked to the API since that
+// window started: its readings are stale, whatever they say (`at` 0).
 //
 // A reading whose window has already reset (resets_at in the past) is stale whatever its
 // percentage, and a reading that names its window beats one that does not: a reading without
@@ -137,13 +143,57 @@ export function fresherWindow(a, b, now = Date.now() / 1000) {
   if (overA !== overB) return overA ? b : a; // a window that has reset is stale
   if ((ra === null) !== (rb === null)) return ra === null ? b : a; // a known window beats an unknown one
   if (ra !== null && rb !== null && Math.abs(ra - rb) > SAME_WINDOW_S) return ra > rb ? a : b; // newer window
-  return b.used_percentage > a.used_percentage ? b : a; // same window (or both unknown): usage only rises
+  // Same window (or both unknown): the reading that changed last, else the higher one.
+  const ta = typeof a.at === "number" ? a.at : 0, tb = typeof b.at === "number" ? b.at : 0;
+  if (ta !== tb) return ta > tb ? a : b;
+  return b.used_percentage > a.used_percentage ? b : a;
+}
+
+const WINDOWS = ["five_hour", "seven_day"];
+const SESSION_KEEP_S = 8 * 86400; // a session not seen for longer is forgotten by the pool
+const isReading = (w) => w && typeof w === "object" && typeof w.used_percentage === "number";
+const sessionKey = (sid) => createHash("sha256").update(String(sid)).digest("hex").slice(0, 12);
+
+// Pure: this session's own readings stamped with `at` (see above), and the pool's record of every
+// session's last readings with this one updated. `shared` is the pool as read (null for none),
+// `sid` the session's id (none: the readings stay unstamped and nothing is recorded).
+export function stampReadings(mine, shared, sid, now = Date.now() / 1000) {
+  const own = mine && typeof mine === "object" ? mine : {};
+  const sessions = shared && typeof shared.sessions === "object" && shared.sessions ? { ...shared.sessions } : {};
+  for (const [k, s] of Object.entries(sessions)) if (!s || !(s.seen >= now - SESSION_KEEP_S)) delete sessions[k];
+  if (!sid) return { stamped: own, sessions };
+  const key = sessionKey(sid);
+  const prev = sessions[key] || {};
+  const pooled5 = shared && shared.five_hour;
+  const stale = isReading(own.five_hour) && isReading(pooled5) && typeof own.five_hour.resets_at === "number"
+    && typeof pooled5.resets_at === "number" && pooled5.resets_at - own.five_hour.resets_at > SAME_WINDOW_S;
+  // When the session was last seen, renewed once a day, so the pool is not rewritten on every render.
+  const seen = typeof prev.seen === "number" && prev.seen >= now - 86400 && prev.seen <= now ? prev.seen : now;
+  const stamped = { ...own }, record = { seen };
+  for (const k of WINDOWS) {
+    const w = own[k];
+    if (!isReading(w)) continue;
+    const p = prev[k];
+    const same = p && p.used_percentage === w.used_percentage && p.resets_at === w.resets_at;
+    // Seen for the first time below what the pool holds for the same window: an idle chat with old
+    // numbers, not a reset (a reset shows as a change in a session the pool already knows). Only a
+    // pool that keeps `at` can tell; an older pool's reading is beaten by a fresh one.
+    const pooled = shared && shared[k];
+    const behind = !p && isReading(pooled) && typeof pooled.at === "number" && pooled.at > 0
+      && typeof w.resets_at === "number" && typeof pooled.resets_at === "number"
+      && Math.abs(pooled.resets_at - w.resets_at) <= SAME_WINDOW_S && w.used_percentage < pooled.used_percentage;
+    const at = stale || behind ? 0 : same && typeof p.at === "number" ? p.at : now;
+    stamped[k] = { used_percentage: w.used_percentage, resets_at: w.resets_at, at };
+    record[k] = stamped[k];
+  }
+  sessions[key] = record;
+  return { stamped, sessions };
 }
 
 // Pure: merge this session's rate_limits with the shared ones; returns the merged object.
 export function mergeRateLimits(mine, shared, now = Date.now() / 1000) {
   const out = { ...(mine && typeof mine === "object" ? mine : {}) };
-  for (const k of ["five_hour", "seven_day"]) {
+  for (const k of WINDOWS) {
     const w = fresherWindow(out[k], shared && shared[k], now);
     if (w) out[k] = w; else delete out[k];
   }
@@ -163,16 +213,21 @@ function rateLimitsFiles(env) {
 
 // I/O wrapper: read the shared snapshot, merge, write it back if anything got fresher.
 // Throw-proof: the render path has no top-level catch, so failures keep the session's own.
-export function syncRateLimits(mine, env) {
+export function syncRateLimits(mine, env, sid = null, now = Date.now() / 1000) {
   const { file, oldFileOf } = rateLimitsFiles(env);
   const { text, old } = readLearned(file, oldFileOf);
   let shared = null;
   try { shared = JSON.parse(text); } catch { /* first reading */ }
-  const merged = mergeRateLimits(mine, shared);
+  const { stamped, sessions } = stampReadings(mine, shared, sid, now);
+  const merged = mergeRateLimits(stamped, shared, now);
+  // The pool: the freshest reading of each window, and each session's last readings; written only
+  // when something in it changed.
   const pick = (o) => ({ five_hour: o && o.five_hour, seven_day: o && o.seven_day });
-  if (old || JSON.stringify(pick(merged)) !== JSON.stringify(pick(shared))) {
+  const changed = JSON.stringify(pick(merged)) !== JSON.stringify(pick(shared))
+    || JSON.stringify(sessions) !== JSON.stringify((shared && shared.sessions) || {});
+  if (old || changed) {
     try { // atomic: concurrent sessions never read a half-written file
-      writeAtomic(file, JSON.stringify(pick(merged)));
+      writeAtomic(file, JSON.stringify({ ...pick(merged), sessions }));
     } catch { /* ignore: next render retries */ }
   }
   return merged;

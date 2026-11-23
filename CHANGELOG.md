@@ -81,6 +81,16 @@ Saved skin choices keep working.
 
 ### Fixed
 
+- After the account's usage was reset by hand, the bar kept showing the limits as used up (100 %
+  for the week): the readings pooled across sessions took the higher percentage of the same
+  window, as if usage could only rise. The pool now keeps, per session, when its reading last
+  changed, and the reading that changed last wins; a chat idle since an older 5-hour window no
+  longer brings its old numbers back.
+- The right edge of every box was one column short on its content rows: the box's right padding
+  showed the terminal's background instead of the panel.
+- The USAGE values took their short form (`4h`, `3d`, `55`) as soon as the box narrowed at all,
+  though their bars had room to give. Children that grow now shrink first, so the values keep
+  `4h48m`, `3d20h` and `55%` until the bars are at their minimum.
 - After its source changed (a `git pull` in a checkout, an upgrade in place) the render daemon
   exited and nothing started a new one until the session's next hook, so an idle session greyed
   out and then showed `gamebar: offline`. The daemon now starts its successor from the new source

@@ -62,6 +62,23 @@ children = [{ kind = "label", text = "in" }]
   };
   const ell = cutSkin("ellipsis"), clip = cutSkin("clip");
   ok(clip === "claud…" && ell === clip, `overflow = "clip" ends the cut with … ("${clip}"), and "ellipsis" draws the same ("${ell}")`);
+
+  // A box's content is drawn on its fill: a row that sets the same background as the fill must not
+  // reset it to the terminal's before the box's right padding, or that column shows the terminal's
+  // background (the right edges of the DOOM boxes jumped by a column).
+  const panelFile = path.join(SB, "panel.toml");
+  const panelSkin = (container) => {
+    writeFileSync(panelFile, `version = 2\n[skin.panel]\nroot = "b"\n[element.b]\nkind = "${container}"\nfill = "#102030"\n` +
+      (container === "box" ? `padding = 1\ntitle = "T"\ndirection = "vertical"\n` : `lines = "none"\n`) +
+      `children = [{ kind = "label", text = "ab", background = "#102030" }, { kind = "label", text = "c", background = "#102030" }]\n`);
+    return drawEntry({ name: "panel", file: panelFile, entry: null, game: null, user: true }, { width: 20 }).lines;
+  };
+  for (const c of ["box", "grid"]) {
+    const inner = panelSkin(c).map((l) => l.replace(/^\x1b\[0m/, "").replace(/\x1b\[0m$/, ""));
+    // A column drawn on the terminal's background inside the box or cell: a reset to it followed by
+    // something visible (the padding after a shorter child).
+    ok(inner.every((l) => !/\x1b\[49m[^\x1b]/.test(l)), `a ${c}'s fill reaches its right edge on every row (${JSON.stringify(inner.map((l) => l.replace(/\x1b/g, "⎋")))})`);
+  }
 } finally {
   rmSync(SB, { recursive: true, force: true });
 }
