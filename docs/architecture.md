@@ -7,9 +7,11 @@ and the release steps are in [CONTRIBUTING.md](../CONTRIBUTING.md).
 ## The idea in one paragraph
 
 The bar has one general part, the **platform**, and **games** that are only data. The platform reads
-the session, turns it into metric values and a game-neutral reaction, and draws a **skin**: a tree of
-shared elements described in TOML. A game brings a manifest, its skins and an npm package of assets
-(images, scripts, conversation libraries). Nothing in the platform names a game; it finds games
+the session, turns it into raw metric values and a game-neutral reaction, and draws a **skin**: a
+tree of shared nodes (containers and metric visuals) described in TOML. A game brings a manifest,
+one skin file of named skins and an npm package of assets (images, scripts, conversation
+libraries). One game, the one-row `default` game, ships inside the bar and is drawn when nothing
+is chosen. Nothing in the platform names a game; it finds games
 through the registry, and `test/games/general-part.test.mjs` fails when a game's name appears in
 `src/` outside `src/games/` or in `bin/`.
 
@@ -24,9 +26,9 @@ flowchart LR
   hook -- start / restart --> daemon
   daemon --> render[render<br/>src/render.js]
   render --> metrics[metrics and reaction<br/>src/metrics/]
-  render --> skin[skin: load, fit, scripts, draw<br/>src/kit/skin/]
-  skin --> elements[elements<br/>src/kit/elements/]
-  skin --> scripts[script worker<br/>src/platform/scripts/]
+  render --> skin[skin: load, resolve, fit, draw<br/>src/kit/layout/]
+  skin --> nodes[containers and visuals<br/>src/kit/nodes/]
+  skin --> scripts[script pass and worker<br/>src/kit/skin/scripts.js, src/platform/scripts/]
   skin --> assets[asset store<br/>src/platform/assets.js]
   games[games: manifests and skins<br/>src/games/] --> skin
   packages[asset packages<br/>@claude-game-bar/&lt;game&gt;] --> assets
@@ -49,13 +51,16 @@ src/                  the platform, and the game data that ships with it
   package-root.js     the package root every path and the install hash come from
   platform/           runtime directory, env settings, journal, frame file, daemon supervision,
                       sweep, reaper, git and MSYS snapshots, the asset store, the script worker
-  metrics/            the metric catalogue, metric values, the game-neutral reaction
-  kit/                drawing: elements, skin loader/fit/draw/script pass, chat library,
-                      colours, the glyph raster
+  metrics/            the metric catalogue, raw metric values, the bounded formatters (format.js),
+                      the game-neutral reaction
+  kit/                drawing: layout/ (skin loader, variables, expressions, resolve, fit, draw),
+                      nodes/ (containers and visuals), skin/ (script pass, warning line), the chat
+                      library, colours, the glyph raster
   install/            settings, the statusLine command, daemons, the old package, the emoji font
   games/              the registry (index.js) and one data folder per game:
     <game>/game.toml  the manifest
-    <game>/skins/     the game's bundled skins
+    <game>/<game>.toml  the game's skins, as named entries of one file
+    default/          the built-in one-row game drawn when nothing is chosen
 packages/<game>/      the npm package @claude-game-bar/<game>: images, scripts, conversations
                       (not part of the main package; see packages/README.md)
 test/                 one runner (scripts/run-tests.mjs) for every *.test.mjs; e2e on its own
@@ -83,18 +88,22 @@ Claude Code runs the `statusLine` command about once a second and pipes the sess
       sessions of one Claude account (`src/metrics/ratelimits.js`, the account from
       `src/platform/account.js`); and the game-neutral **reaction**
       (`src/metrics/reaction.js`): what just happened, how long ago, how hurt the player is;
-   3. loads the skin (`src/kit/skin/load.js`), skipping and reporting any part that does not hold;
-   4. fits it (`src/kit/skin/fit.js`) to the terminal's width and to a third of its rows: elements
-      shrink to their minimums, then drop by priority, then the skin gives way to its `smaller`
-      skin;
-   5. runs the scripts (`src/kit/skin/scripts.js`) of the elements that stay, all of a session's in
+   3. loads the skin's entry (`src/kit/layout/load.js`), skipping and reporting any part that does
+      not hold, and resolves it for this render (`src/kit/layout/resolve.js`): every expression
+      evaluated against the game's variables and the metric values, colours inherited, and what has
+      nothing to show marked;
+   4. fits it (`src/kit/layout/fit.js`) to the terminal's width and to a third of its rows: every
+      node shrinks toward its minimum; then, at the smallest container that overflows, decoration
+      goes, optional nodes drop by priority, inner switches move on, and only then the enclosing
+      switch takes its next case (the tall DOOM bar, then the balanced, compact and line bars);
+   5. runs the scripts (`src/kit/skin/scripts.js`) of the nodes that stay, all of a session's in
       one batch;
-   6. draws (`src/kit/skin/draw.js`) each element by its descriptor at the width the fit gave it,
-      and adds the warning line under the bar when something needs the user's attention.
+   6. draws (`src/kit/layout/draw.js`) each node by its kind at the size the fit gave it, and adds
+      the warning line under the bar when something needs the user's attention.
 
 Where no suitable bash exists (macOS with its own bash 3.2, Windows without Git Bash) the
 `statusLine` is the **one-shot** renderer `node src/statusline.js`: the same render without the
-daemon and without scripts, so an animation shows its default frame and a chat plays only the
+daemon and without scripts, so a sprite shows its default frame and a chat plays only the
 platform's conversations.
 
 ### The client per platform
@@ -138,36 +147,42 @@ the other. The hook also:
 When two installations are wired (a global install and a checkout with `install --local`), the
 hooks of the installation that does not draw the session step aside, so each event is counted once.
 
-## Skins and elements
+## Skins and nodes
 
-A skin is one TOML file: a tree of elements, each a table with a `kind`.
+A game's skin file is a tree of nodes, each a table with a `kind`, and named skins that are entry
+points into it (`[skin.doom]`, `[skin.doom-line]`). The design, with its reasons and worked
+examples, is `docs/ideation/2026-11-20-skin-component-system.md`; the format is in CONTRIBUTING.md,
+*Skins*.
 
-- **Containers** lay children out: `row`, `column`, and the frames `box` (title, background) and
-  `grid` (lines between cells, one cell selectable). They decide what happens when they have nothing
-  to show (`when_empty`) and how spare width is shared (`grow`).
-- **Metric elements** bind one metric from the catalogue (`src/metrics/catalogue.js`) and draw it
-  with a visual: `text`, `number`, `progress`, `sparkline`, `equalizer`, `icon`, `icon-row`,
-  `scroll-list`, `chat`, `animation` and `animation-3d` (a placeholder until there is a model
-  renderer).
+- **Containers** lay children out: `anchor` (nine places around a centre that stays exactly in the
+  middle), `list`, `box` (a list with a title, fill and border), `grid` (equal cells, lines drawn
+  from the arms that are there, any number of selected cells), `layers` and `switch` (alternatives
+  by condition and by room).
+- **Leaves**: `label`, and the visuals `text`, `number`, `bar`, `meter`, `state`, `sparkline`,
+  `columns`, `scroll`, `chat` and `sprite`, each binding a metric from the catalogue
+  (`src/metrics/catalogue.js`).
 
-Each kind is a descriptor in `src/kit/elements/` that lists its parameters (meaning, type, default,
-allowed values) and says how wide it can be drawn. The loader checks a skin against these
-descriptors; the fit and the draw call them. A new kind of element, such as a minimap, is platform
-work there, and every game can use it.
+Every node answers one size contract: its minimum, natural and largest width and its rows. A visual
+takes its width from its value's type, through the bounded formatters (`src/metrics/format.js`),
+never from the current value, so a value never moves the bar. Each kind is a descriptor in
+`src/kit/nodes/` that lists its parameters (meaning, type, default, allowed values) and how it
+measures and draws. A new kind, such as a minimap, is platform work there, and every game can use
+it. Any parameter may be an expression over the game's variables and the metric values
+(`src/kit/layout/expr.js`), parsed by the bar and never run as JavaScript.
 
-Bundled skins live in `src/games/<game>/skins/`; a user's own skins in
-`~/.claude/claude-game-bar/skins/<name>/`. A skin may use the assets of any game. Its `smaller`
-names the skin to fall back to when it does not fit, which makes the chains
-`doom-full` → `doom-standard` → `doom-minimal` → `doom-compact` → `doom-line` and
-`minecraft` → `minecraft-compact`.
+Bundled skins live in `src/games/<game>/<game>.toml`; a user's own skins in
+`~/.claude/claude-game-bar/skins/<name>/<name>.toml`. A skin may use the assets of any game. Skin
+names of releases before 3.0.0 select the entries the games' `[legacy] skins` map them to,
+keeping the size they chose (`doom-minimal` starts at the balanced bar).
 
 ## Scripts
 
-Any element can name a script that changes how it looks each render (the mugshot's frame, the
-hotbar's selected slot); a `chat` can name conversation libraries. Scripts run only in the daemon,
+Any node can name a script that changes how it looks each render (the mugshot's frame, the
+hotbar's selected slots); a `chat` can name conversation libraries. A node's script state is kept
+by its placement path, so an element shared by two switch cases has a state in each. Scripts run only in the daemon,
 in one worker thread (`src/platform/scripts/`) with a 64 MB heap: each call has 20 ms, a render pass
 has 200 ms for all sessions, a script that throws is off until its file changes and one that runs
-late is off for a growing cooldown. A script never changes an element's size. Scripts are trusted
+late is off for a growing cooldown. A script never changes a node's size. Scripts are trusted
 code from the user's skin folders and the installed game packages; the context keeps timers,
 `require` and `eval` out of reach but is not a security boundary. The interface is in
 CONTRIBUTING.md, *Skin scripts*.
@@ -182,7 +197,7 @@ A skin names an asset as `<game>:<path>`. The asset store (`src/platform/assets.
 
 A missing pinned package is installed in the background (`npm install --ignore-scripts` with
 constant arguments, under a lock, checked against the pinned integrity before it is used); until
-then the element draws its default and the warning line names the package. `install` removes
+then the node draws its default and the warning line names the package. `install` removes
 packages no skin used for 30 days. The packages are published from `master` by
 `.github/workflows/publish-assets.yml`.
 
@@ -191,14 +206,15 @@ packages no skin used for 30 days. The packages are published from `master` by
 Images are converted to block glyphs inside the bar (`src/kit/raster/`): a PNG decoder, a
 shape-matching renderer and a cache (in memory, and on disk for the one-shot command). The glyph
 step (half, quadrant, sextant, wedge, octant) comes from the terminal's identity
-(`src/kit/raster/glyph-level.js`), capped per image by the element's `glyphs` parameter.
+(`src/kit/raster/glyph-level.js`), capped per image by the sprite's `glyphs` parameter.
 `claude-game-bar test-card` shows which steps a terminal really draws.
 
 ## Where the design came from
 
 - `docs/plans/`: the plans of the larger changes, newest last; each starts with its status.
-  `2026-11-16-1247-feat-game-as-skin-plan.md` is the one behind this architecture.
+  `2026-11-16-1247-feat-game-as-skin-plan.md` made games data;
+  `2026-11-20-1940-feat-skin-component-system-plan.md` is the skin engine of 3.0.0.
 - `docs/ideation/`: the explorations behind them; `2026-06-06-doom-statusbar-ideation.md` is the
-  original idea of the bar.
+  original idea of the bar, `2026-11-20-skin-component-system.md` the design of the skin engine.
 - Open proposals and bugs: [GitHub Issues](https://github.com/99LevelsUp/claude-game-bar/issues).
   `docs/BACKLOG.md` maps the IDs of the old backlog (D-18, G-5, …) to issues.

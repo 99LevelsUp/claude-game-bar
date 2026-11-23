@@ -7,8 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The skin engine is new, and the skin format with it: a breaking change for skins of your own.
+Saved skin choices keep working.
+
+### Changed (breaking)
+
+- **A new skin engine and format** (`docs/ideation/2026-11-20-skin-component-system.md`). A game
+  keeps its skins in one file, `src/games/<game>/<game>.toml` (`version = 2`), as named entries
+  of one tree of components. The containers are `anchor`, `list`, `box`, `grid`, `layers` and
+  `switch`; the visuals `text`, `number`, `bar` (was `progress`), `meter` (was `icon-row`),
+  `state` (was `icon`), `sparkline`, `columns` (was `equalizer`), `scroll` (was `scroll-list`),
+  `chat`, `sprite` (was `animation`) and the `label`. Every node shares one size contract
+  (`width`, `min_width`, `max_width`, `grow`, `rows`, `min_rows`), `priority` marks what may be
+  dropped, `empty` replaces `when_absent` and `when_empty`, and any parameter may be a variable
+  or an expression. See CONTRIBUTING.md, *Skins*.
+- **A skin file of the old format is not drawn.** A skin of your own in
+  `~/.claude/claude-game-bar/skins/` that has no `version = 2` falls back to the default game,
+  with a warning under the bar. Rebuild it from a copy of a game's skin file.
+- **Old skin names still work and keep their size.** `doom-full` and `doom-standard` draw `doom`;
+  `doom-minimal` and `doom-compact` start at the balanced and the compact DOOM bar and never draw
+  a taller one; `doom-line` is the one-row bar. Saved choices, `GAMEBAR_SKIN`, presets and themes
+  all go through the same names.
+- **`minecraft-compact` now draws the one Minecraft skin**: it has no form of its own. Below six
+  rows the Minecraft bar gives up its hotbar and keeps hearts, hunger and the XP bar.
+- **With no choice saved, the bar draws the new default game**, not DOOM. Choose DOOM with
+  `claude-game-bar skin doom`.
+- **The DOOM mugshot and the Minecraft HUD are exactly in the middle** of the terminal at every
+  width, and each side gives up its boxes inside its own half (SAVE from the left; SYSTEM, TASKS
+  and AGENTS from the right). The tall DOOM bar fits a 6-row budget, its boxes giving up title
+  rows. The 3-row DOOM bar draws MODEL and USAGE left of the mugshot and ACTIVITY right of it, and
+  leaves the cost out.
+- **A script's `selected`** may be one index or a list of indices or child ids, so a grid can
+  select several cells; a script's state is kept per placement of its node.
+
 ### Added
 
+- **The default game**, built into the bar: one row with the model, effort and modes, the
+  context, both limits with their resets, the folder and the CPU cores. It needs no download and
+  works offline from the first run.
+- **Expressions and variables in skins**: `color = "= case when $context.hp > 80 then $bad else
+  $good end"`, `"$panel"` from the game's `[vars]`, every metric under its catalogue id. They are
+  read by the bar itself, never run as code.
 - Two metrics, `save.leanctx.share` and `save.lingua.share`: the share of the original tokens
   that lean-ctx and LLMLingua saved this session, as a percentage. LLMLingua's share is its
   last saved percentage, or comes from its compression ratio when that is all it reports.
