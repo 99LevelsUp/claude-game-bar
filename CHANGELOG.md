@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder (`skins/doom/`, `skins/default/`, `skins/minecraft/`) is still never drawn, but
   `claude-game-bar skin list` names it as not drawn, and a session that draws the bundled skin of
   that name shows a warning asking to rename the folder.
+- **A missing or unreadable picture says so** (#98). A skin that names a file its folder (or its
+  game's assets) does not have, a frame the skin's script names that the frames folder lacks, and
+  a file that is no picture still draw the default, now with a warning naming the reference
+  (`asset-not-found`, `asset-unreadable`), so a typo no longer looks like a working skin.
 
 ## [3.0.0] - 2026-11-23
 

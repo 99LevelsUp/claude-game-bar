@@ -102,12 +102,11 @@ export function leadsOutside(root, file) {
   return back === "" || back === ".." || back.startsWith(`..${path.sep}`) || path.isAbsolute(back);
 }
 
-// `rel` inside `root`, when it exists there; null for a path that leads out of it.
+// `rel` inside `root`, whether it exists there or not; null for a path that leads out of it.
 function inside(root, rel) {
   if (!root || typeof rel !== "string" || rel === "" || path.isAbsolute(rel)) return null;
   const file = path.resolve(root, rel);
-  if (leadsOutside(root, file)) return null;
-  return existsSync(file) ? file : null;
+  return leadsOutside(root, file) ? null : file;
 }
 
 // What a reference names: { kind: "game", game, path }, { kind: "package", name } for a reference
@@ -286,7 +285,10 @@ const minutes = (ms) => Math.max(1, Math.ceil(ms / 60000));
 //   lookup     game name -> registry entry (the registry's findGame)
 //   install    starts a background install (startInstall)
 // Returns:
-//   resolve(ref)  the file or folder a reference names, or null (the element then draws its default)
+//   resolve(ref)  the file or folder a reference names, or null (the element then draws its default);
+//                 a path its folder does not have is reported (asset-not-found)
+//   report(cause, ref)  reports a file the element could not use: "asset-not-found" for a file a
+//                 reference leads to that is not there, "asset-unreadable" for one that is no picture
 //   need(name)    the folder of game `name`'s assets, starting its install when it is missing
 //   packages()    the store folders (<game>@<version>) of the pinned games met so far, sorted
 //   warnings()    what the bar should say, in the warning line's form, one per package or reference
@@ -331,11 +333,21 @@ export function createAssetResolver({ env = process.env, now = Date.now(), folde
     if (typeof ref !== "string" || ref === "") return null;
     const r = parseAssetRef(ref);
     if (r.kind === "package") return need(r.name.startsWith("@") ? r.name : `npm:${r.name}`);
-    if (r.kind === "own") return inside(folder, r.path);
-    return inside(need(r.game), r.path);
+    // A folder that is there (the skin's own, or the game's) but lacks the path: a typo the skin
+    // would otherwise hide behind its default. A missing package is reported by need().
+    const file = inside(r.kind === "own" ? folder : need(r.game), r.path);
+    if (!file) return null;
+    if (existsSync(file)) return file;
+    report("asset-not-found", ref);
+    return null;
   }
 
-  return { resolve, need, packages: () => [...used].sort(), warnings: () => [...warned.values()] };
+  function report(cause, ref) {
+    if (cause === "asset-unreadable") warn(warning(cause, ref, `${ref} cannot be read as a picture; drawing the default`));
+    else if (cause === "asset-not-found") warn(warning(cause, ref, `${ref} is not there; drawing the default`));
+  }
+
+  return { resolve, need, report, packages: () => [...used].sort(), warnings: () => [...warned.values()] };
 }
 
 export const usageFile = (env = process.env, hash = rootHash()) => path.join(userDir(env), `usage-${hash}.json`);
