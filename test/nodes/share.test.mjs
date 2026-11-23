@@ -65,6 +65,9 @@ try {
   const box = (align) => draw(`box-${align}`, `[element.root]\nkind = "box"\nwidth = 16\ntitle = "T"\ntitle_align = "${align}"\nborder = "light"\nchildren = [{ kind = "label", text = "x" }]\n`, 16)[0];
   const [s, c, e] = ["start", "center", "end"].map((a) => box(a).indexOf("T"));
   ok(s < c && c < e, `a box's title moves with title_align: start ${s}, center ${c}, end ${e} (${JSON.stringify(box("end"))})`);
+  const bare = (align) => draw(`bare-${align}`, `[element.root]\nkind = "box"\nwidth = 16\ntitle = "T"\ntitle_align = "${align}"\nchildren = [{ kind = "label", text = "x" }]\n`, 16)[0].replace(/\x1b\[[0-9;]*m/g, "");
+  const [bs, bc, be] = ["start", "center", "end"].map((a) => bare(a).indexOf("T"));
+  ok(bs === 0 && bc === 7 && be === 15, `a box without a border moves its title with title_align too: start ${bs}, center ${bc}, end ${be} (${JSON.stringify(bare("end"))})`);
 } finally {
   rmSync(SB, { recursive: true, force: true });
 }

@@ -12,7 +12,7 @@ import { vlen } from "../../text.js";
 import { BOX_PARAMS } from "./params.js";
 import { measureList, listRooms, placeList, drawList } from "./list.js";
 import { BOLD } from "../../ansi.js";
-import { blank, pad, fitText, rgbOf, plainRgb, bgEsc, fgEsc } from "../paint.js";
+import { blank, fitText, rgbOf, plainRgb, bgEsc, fgEsc } from "../paint.js";
 import { lineSet } from "../lines.js";
 
 const BOLD_OFF = "\x1b[22m";
@@ -99,7 +99,7 @@ export const boxKind = define({
       for (const l of content) lines.push(on + ink + set[4] + RESET_FG + side + l + side + ink + set[4] + RESET_FG + off);
       lines.push(on + ink + set[8] + set[1].repeat(across) + set[10] + RESET_FG + off);
     } else {
-      if (d.title) lines.push(on + BOLD + fgEsc(titleRgb) + side + pad(fitText(d.title, innerW), innerW, p.title_align) + side + BOLD_OFF + RESET_FG + off);
+      if (d.title) lines.push(on + BOLD + fgEsc(titleRgb) + side + fitText(d.title, innerW, { align: p.title_align }) + side + BOLD_OFF + RESET_FG + off);
       for (const l of content) lines.push(on + side + l + side + off);
     }
     while (lines.length < h) lines.push(on + blank(w) + off);
