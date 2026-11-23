@@ -42,7 +42,7 @@ const base = { GAMEBAR_USER_DIR: USER, GAMEBAR_THEME_FILE: THEME_FILE };
 const theme = (name) => writeFileSync(THEME_FILE, JSON.stringify({ theme: name }) + "\n");
 const reset = () => { rmSync(THEME_FILE, { force: true }); rmSync(path.join(USER, "skin.json"), { force: true }); };
 const select = (env = {}) => selectSkin({ ...base, ...env });
-const userSkin = (name, from = path.join(ROOT, "test", "fixtures", "skins", "fit-narrow.toml")) => {
+const userSkin = (name, from = path.join(ROOT, "test", "fixtures", "skins-v2", "basic.toml")) => {
   mkdirSync(path.join(USER, "skins", name), { recursive: true });
   copyFileSync(from, path.join(USER, "skins", name, `${name}.toml`));
 };
@@ -69,7 +69,7 @@ try {
     theme("fixture");
     let s = select({ GAMEBAR_PRESET: path.join(OLD_PRESETS, "full.toml") });
     ok(s.name === "fixture" && s.warnings.length === 0, `saved theme fixture + the installer's full.toml -> fixture, no warning (${s.name}, ${s.warnings.length})`);
-    ok(s.file === path.join(HERE, "fixture-game", "skins", "fixture.toml"), "and the selection carries the skin's file");
+    ok(s.file === path.join(HERE, "fixture-game", "fixture.toml") && s.entry === "fixture", "and the selection carries the skin's file and entry");
     theme("fixture-old");
     ok(select().name === "fixture", "a saved alias of the game picks it too");
     ok(select({ GAMEBAR_THEME: "sized", GAMEBAR_PRESET: path.join(OLD_PRESETS, "fixture.toml") }).name === "sized-full",
@@ -87,12 +87,12 @@ try {
     s = select({ GAMEBAR_PRESET: mine });
     ok(s.name === "sized-full" && s.warnings.length === 1 && s.warnings[0].message.includes(mine),
       `theme sized + ~/my.toml -> sized-full with a warning naming the file (${s.warnings.map((w) => w.message).join("; ")})`);
-    rmSync(THEME_FILE);
-    s = select({ GAMEBAR_PRESET: mine });
-    ok(s.name === defaultGame().defaultSkin && s.warnings.length === 1 && s.warnings[0].message.includes(mine),
-      `no theme + ~/my.toml -> the default game's default skin (${s.name}) with a warning naming the file`);
     ok(typeof s.warnings[0].key === "string" && s.warnings[0].key === select({ GAMEBAR_PRESET: mine }).warnings[0].key,
       "the warning has a key that stays the same from render to render");
+    rmSync(THEME_FILE);
+    s = select({ GAMEBAR_PRESET: mine });
+    ok(s.name === defaultGame().defaultSkin && s.warnings.length === 0,
+      `no theme + ~/my.toml -> the default game's default skin (${s.name}); the default game reads no presets, so nothing to warn`);
     s = select();
     ok(s.name === defaultGame().defaultSkin && s.warnings.length === 0, "nothing chosen at all -> the default game's default skin");
 
@@ -163,7 +163,10 @@ try {
 // --- The command line --------------------------------------------------------------------------
 {
   const G = GAMES.find((g) => g.readsPresets && g.presetSkins.full && g.presetSkins.minimal);
-  const FULL = G.presetSkins.full, MINIMAL = G.presetSkins.minimal;
+  // The skins the sizes' old names select now (doom-full is the entry doom).
+  const FULL = findSkin(G.presetSkins.full, base).name, MINIMAL = findSkin(G.presetSkins.minimal, base).name;
+  // The user had chosen this game before skins; with no choice at all the default game is drawn.
+  theme(G.name);
   const home = path.join(SB, "home"), proj = path.join(SB, "proj");
   for (const d of [path.join(home, ".claude"), path.join(proj, ".claude")]) mkdirSync(d, { recursive: true });
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(GAMEBAR|DOOMBAR|MUGSHOT)_/i.test(k)

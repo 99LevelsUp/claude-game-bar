@@ -1,0 +1,10 @@
+# A skin whose root container has a parameter no kind knows: one warning, and the skin still draws.
+version = 2
+
+[skin.main]
+root = "bar"
+
+[element.bar]
+kind = "list"
+glow = true
+children = [{ kind = "text", metric = "model.name", icon = "🤖", width = 14 }]

@@ -38,11 +38,11 @@ try {
   ok(out === skinCli("minecraft"), "and prints what skin minecraft prints");
   ok(!existsSync(env.GAMEBAR_THEME_FILE), "theme writes no theme file");
   cli("next");
-  ok(saved() === "minecraft-compact", `theme next goes to Minecraft's low skin, the last one (${saved()})`);
+  ok(saved() === "default" && !render().includes("MODEL"), `theme next after the last skin wraps to the first, the default game's (${saved()})`);
   cli("next");
-  ok(saved() === "doom-full" && render().includes("MODEL"), `theme next after the last skin wraps to the first, doom's (${saved()})`);
+  ok(saved() === "doom" && render().includes("MODEL"), `theme next goes on to doom's first skin (${saved()})`);
   cli("next");
-  ok(saved() === "doom-standard", `theme next goes on through the skins (${saved()})`);
+  ok(saved() === "doom-minimal", `theme next goes on through the skins (${saved()})`);
   cli("minecraft-hud");
   ok(saved() === "minecraft", "old name minecraft-hud -> saved as the minecraft skin");
   ok(cli("list") === skinCli("list") && cli() === skinCli(), "theme and theme list list the skins, as skin does");
@@ -55,7 +55,7 @@ try {
   writeFileSync(env.GAMEBAR_THEME_FILE, JSON.stringify({ theme: "minecraft-hud" }));
   ok(render().includes("━"), "a saved 0.12.x choice (minecraft-hud) still renders the hotbar");
   writeFileSync(env.GAMEBAR_THEME_FILE, JSON.stringify({ theme: "satisfactory" }));
-  ok(render().includes("MODEL"), "a saved theme that no longer exists falls back to doom");
+  ok(render().includes("🤖") && !render().includes("MODEL"), "a saved theme that no longer exists falls back to the default game");
   writeFileSync(env.GAMEBAR_THEME_FILE, JSON.stringify({ theme: "minecraft" }));
   cli("doom");
   ok(render().includes("MODEL") && JSON.parse(readFileSync(env.GAMEBAR_THEME_FILE, "utf8")).theme === "minecraft",

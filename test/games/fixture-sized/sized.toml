@@ -1,0 +1,9 @@
+# The sized fixture game's skins: a full and a minimal size, each its own entry.
+version = 2
+game = "sized"
+
+[skin.sized-full]
+root = { kind = "list", children = [{ kind = "text", metric = "model.name", icon = "FULL", width = 35 }] }
+
+[skin.sized-minimal]
+root = { kind = "list", children = [{ kind = "text", metric = "model.name", icon = "MIN", width = 16 }] }
