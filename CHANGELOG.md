@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each placing others several times, would build more is skipped with a `too-many-nodes`
   warning, and the default game is drawn, instead of building a tree that grows with the power of
   its depth on the render daemon's one thread.
+- **A switch's `when` reads its own room** (#95). `$width` and `$rows` in a case's condition were
+  the terminal's room wherever the switch sat; they are now the room the switch was given (an
+  anchor's side, a box's inside, a grid's cell), and a side its container does not bound keeps
+  the container's. No bundled skin uses `when`, so no bundled bar changes.
 
 ## [3.0.0] - 2026-11-23
 

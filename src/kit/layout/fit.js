@@ -122,7 +122,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     let s;
     if (!r.desc.container) s = settle(r, leafSize(r));
     else if (r.kind === "switch") {
-      const fs = r.cases.filter((c) => holds(c, rootRoom)).map((c) => floor(c.r, false)).filter(Boolean);
+      const fs = r.cases.filter((c) => holds(c, whenRoom(r))).map((c) => floor(c.r, false)).filter(Boolean);
       s = fs.length ? settle(r, {
         min: Math.min(...fs.map((x) => x.min)), nat: Math.min(...fs.map((x) => x.nat)), max: Infinity,
         rows: Math.min(...fs.map((x) => x.rows)), minRows: Math.min(...fs.map((x) => x.minRows)),
@@ -143,6 +143,8 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
   // A case's condition, evaluated with the room the switch was given. A name it reads that nothing
   // defines (a typo) makes it false, and is reported once, as a parameter's would be.
   const reported = new Set();
+  // The room a switch's conditions read: its own, recorded by placeConditions below, else the root's.
+  const whenRoom = (s) => s.whenRoom || rootRoom;
   function holds(c, room) {
     if (!c.when) return true;
     const { value, unknown } = evaluate(c.when, c.r.parent.scope.withRoom({ width: room.w, rows: room.h }));
@@ -157,17 +159,45 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     return truthy(value);
   }
 
-  // The case a switch starts with: the first whose condition holds and whose floor fits.
+  // The case a switch starts with: the first whose condition holds (read with `when`'s room) and
+  // whose floor fits `room`.
+  function firstCase(s, when, room) {
+    const ok = s.cases.map((c) => holds(c, when));
+    const idx = s.cases.findIndex((c, i) => ok[i] && floorFits(c.r, room));
+    if (idx >= 0) return idx;
+    const last = ok.lastIndexOf(true);
+    return last < 0 ? s.cases.length - 1 : last;
+  }
   function chooseCases(r, room) {
-    if (r.kind === "switch" && r.cases.length) {
-      const ok = r.cases.map((c) => holds(c, room));
-      let idx = r.cases.findIndex((c, i) => ok[i] && floorFits(c.r, room));
-      if (idx < 0) idx = ok.lastIndexOf(true);
-      r.caseIdx = idx < 0 ? r.cases.length - 1 : idx;
-    }
+    if (r.kind === "switch" && r.cases.length) r.caseIdx = firstCase(r, room, room);
     for (const k of allKids(r)) chooseCases(k, room);
   }
   chooseCases(root, rootRoom);
+
+  // A switch with conditions reads them in the room it was given: walking down from the root, each
+  // child's room is the one its container gives it, and a side its container does not bound (a
+  // child of a row of a list across, say) keeps the container's. Those switches choose their case
+  // again with their conditions read there; the floors they are measured by are unchanged, so a
+  // switch without conditions starts where it did. A switch nested in one that changes case is
+  // placed by the case it now draws.
+  const hasWhen = (r) => r.kind === "switch" && r.cases.some((c) => c.when);
+  function placeConditions(r, room) {
+    if (hasWhen(r)) {
+      r.whenRoom = room;
+      const idx = firstCase(r, room, rootRoom);
+      if (idx !== r.caseIdx) { r.caseIdx = idx; invalidate(r); }
+    }
+    if (!r.desc.container) return;
+    if (r.kind === "switch") { for (const c of r.cases) placeConditions(c.r, room); return; }
+    for (const [k, kr] of r.desc.rooms(r, room, ctx)) placeConditions(k, { w: kr.w ?? room.w, h: kr.h ?? room.h });
+  }
+  const anyWhen = (r) => hasWhen(r) || allKids(r).some(anyWhen);
+  if (anyWhen(root)) {
+    placeConditions(root, rootRoom);
+    // Floors read the conditions too: measure them again with the rooms just recorded.
+    const unfloor = (r) => { r._f = undefined; r._ft = undefined; allKids(r).forEach(unfloor); };
+    unfloor(root);
+  }
 
   // The overflow under a node in its room, in one dimension: its own, plus its children's in the
   // rooms they have to themselves.
@@ -273,7 +303,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
 
   function nextCase(s, room) {
     for (let i = (s.caseIdx || 0) + 1; i < s.cases.length; i++) {
-      if (holds(s.cases[i], room) && floorFits(s.cases[i].r, room)) return i;
+      if (holds(s.cases[i], whenRoom(s)) && floorFits(s.cases[i].r, room)) return i;
     }
     return -1;
   }

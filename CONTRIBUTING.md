@@ -151,7 +151,9 @@ children = [                # a child is an id, an inline node, or { ref = "id",
 - `layers`: children drawn over each other; a glyph keeps the background of what is under it.
 - `switch`: `cases = [{ when = "= ...", node = ... }, ...]` (a case without `when` is the else),
   or `children` for cases without conditions. It draws the first case whose condition holds and
-  whose node fits; the conditions may read `$width` and `$rows`, the room it was given.
+  whose node fits; the conditions may read `$width` and `$rows`, the room it was given: an
+  anchor's side, a grid's cell, a box's inside. A side its container does not bound (the width of
+  a child of a list across, the height of one of a list down) is the container's room.
 
 **Leaves** (`src/kit/nodes/visuals/`): `label` (fixed text), and the visuals `text`, `number`,
 `bar`, `meter`, `state`, `sparkline`, `columns`, `scroll`, `chat` and `sprite` (frames). Each
