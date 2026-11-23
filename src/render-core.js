@@ -47,7 +47,10 @@ function sessionValues(data, env, now) {
   return { values, reaction };
 }
 
-const indentOf = (env) => Number(envGet("INDENT", env) ?? 2); // Claude Code draws the status line 2 cols in
+// The columns Claude Code keeps from the status line: it draws it 2 columns in and cuts a line that
+// reaches into the last 2 columns with "…" (measured on Windows Terminal and the Pi, issue #37), so
+// the bar gets COLUMNS minus 4 and degrades itself instead of being cut. GAMEBAR_INDENT overrides it.
+const indentOf = (env) => Number(envGet("INDENT", env) ?? 4);
 const columnsOf = (env) => parseInt(env.COLUMNS || "100", 10);
 // The rows the bar may take: GAMEBAR_MAX_ROWS when set, else a third of the terminal's height
 // (LINES, which Claude Code sets before it runs the status line), else no limit, so a terminal that

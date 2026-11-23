@@ -186,7 +186,8 @@ kind = "list"
 gap = 1
 children = [
   { kind = "bar", metric = "context.hp", icon = "🧠", label = "none", grow = 1 },
-  { kind = "number", metric = "context.hp", color = "$threshold" },
+  # As wide as a reset time (4h48m), so the four bars of the box are one length.
+  { kind = "number", metric = "context.hp", color = "$threshold", width = 5, align = "end" },
 ]
 
 [element.limit-5h]
@@ -211,7 +212,7 @@ gap = 1
 priority = 1
 children = [
   { kind = "bar", metric = "sys.ram", icon = "💾", label = "none", grow = 1 },
-  { kind = "number", metric = "sys.ram", color = "$threshold" },
+  { kind = "number", metric = "sys.ram", color = "$threshold", width = 5, align = "end" },
 ]
 
 [element.cost]
