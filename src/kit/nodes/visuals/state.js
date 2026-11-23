@@ -4,7 +4,7 @@
 // room, and its minimum is the icon alone.
 
 import { define } from "../define.js";
-import { param } from "../schema.js";
+import { param, MAX_ROWS } from "../schema.js";
 import { vlen } from "../../text.js";
 import { formatValue } from "../../../metrics/format.js";
 import { block, fitText, paintRgb, fgEsc, TEXT } from "../paint.js";
@@ -28,7 +28,7 @@ export const stateKind = define({
     other: param("text", "", "The icon for a value the map has none for; empty draws the value as it is", { measured: true }),
     show_text: param("boolean", false, "Draw a single value's text after its icon when there is room"),
     sep: param("text", " ", "What separates the items of a list", { measured: true }),
-    items: param("integer", 2, "How many items of a list it keeps room for", { min: 1, measured: true }),
+    items: param("integer", 2, "How many items of a list it keeps room for", { min: 1, max: MAX_ROWS, measured: true }),
   },
   size(r) {
     const p = r.p;

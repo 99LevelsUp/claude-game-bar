@@ -124,7 +124,7 @@ children = [                # a child is an id, an inline node, or { ref = "id",
 |---|---|
 | `kind` | the container, chrome leaf or visual it is |
 | `width`, `min_width`, `max_width` | natural, fewest and most columns; a visual's own come from its value's type, a container's from its children (`min_width` on a container is a floor) |
-| `rows`, `min_rows` | the rows it wants and the fewest it can live with |
+| `rows`, `min_rows` | the rows it wants and the fewest it can live with. Sizes (these, the widths, and a kind's `gap`, `padding`, `columns`, `count`) stop at 1000 columns and 200 rows (`MAX_COLUMNS`, `MAX_ROWS`); a larger value is reported and its default used |
 | `grow` | a weight: how much of a parent's spare room it takes (0 = none) |
 | `priority` | an integer marks it optional: dropped when room runs out, the lowest first. Without one it is essential: never dropped on its own |
 | `empty` | what it does with nothing to show: `collapse` (no room), `blank` (a leaf keeps its minimum size, a container its frame and title), `zero` / `full` (draws as if the value were 0 % / 100 %) |
@@ -172,7 +172,8 @@ are reported as not available in this version.
 
 A part of a skin that does not hold (an unknown key, kind, metric or parameter, a missing child, an
 expression that does not parse) is skipped with one warning, shown as a dim line under the bar for
-60 seconds, and the rest is drawn.
+60 seconds, and the rest is drawn. A skin that throws while it is drawn gives way to the default
+game's default skin, and the warning names the error (`render-failed`, `src/render-core.js`).
 
 ### Variables and expressions
 

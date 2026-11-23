@@ -72,21 +72,27 @@ export function describeAllowed(s) {
   if (s.type === "paint") return `a colour, a list of colours, a list of [value, colour] stops, or "threshold"`;
   const range = s.min !== undefined && s.max !== undefined ? ` from ${s.min} to ${s.max}`
     : s.min !== undefined ? ` of at least ${s.min}` : "";
-  return `a ${s.type}${range}`;
+  return `${/^[aeiou]/.test(s.type) ? "an" : "a"} ${s.type}${range}`;
 }
 
 const ALIGN = ["start", "center", "end"];
 export const PLACES = ["top_left", "top", "top_right", "left", "center", "right", "bottom_left", "bottom", "bottom_right"];
 export const EMPTY = ["collapse", "blank", "zero", "full"];
 
+// The most columns and rows a size setting may ask for. Far beyond any terminal, but bounded, so a
+// mistyped size (or an expression that runs away) is reported and drawn with its default instead of
+// building a line no string can hold.
+export const MAX_COLUMNS = 1000;
+export const MAX_ROWS = 200;
+
 // The settings every node has (§2). A null default means "the kind's own".
 export const SHARED = Object.freeze({
-  width: param("integer", null, "Natural width in columns: what the node wants", { min: 0, measured: true }),
-  min_width: param("integer", null, "The fewest columns the node can live with", { min: 0, measured: true }),
-  max_width: param("integer", null, "The most columns the node can use", { min: 0, measured: true }),
+  width: param("integer", null, "Natural width in columns: what the node wants", { min: 0, max: MAX_COLUMNS, measured: true }),
+  min_width: param("integer", null, "The fewest columns the node can live with", { min: 0, max: MAX_COLUMNS, measured: true }),
+  max_width: param("integer", null, "The most columns the node can use", { min: 0, max: MAX_COLUMNS, measured: true }),
   grow: param("number", 0, "How much of a parent's spare room the node takes (0 = none)", { min: 0 }),
-  rows: param("integer", null, "The rows the node wants", { min: 0, measured: true }),
-  min_rows: param("integer", null, "The fewest rows the node can live with", { min: 0, measured: true }),
+  rows: param("integer", null, "The rows the node wants", { min: 0, max: MAX_ROWS, measured: true }),
+  min_rows: param("integer", null, "The fewest rows the node can live with", { min: 0, max: MAX_ROWS, measured: true }),
   priority: param("integer", null, "Marks the node optional: it may be dropped when room runs out, the lowest first"),
   empty: param("text", "collapse", "What the node does when it has nothing to show", { allowed: EMPTY }),
   empty_when: param("boolean", false, "While true, the node counts as having nothing to show"),

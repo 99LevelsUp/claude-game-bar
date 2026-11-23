@@ -81,7 +81,20 @@ export function renderSessionWith(runScripts, { data, env = process.env, now = D
   if (isPlainObject(data)) data = { ...data };
 
   const selected = selectSkin(env);
-  return renderSkin({ selected, data, env, now, warningStore, scripts, runScripts }) ?? [`gamebar: skin ${selected.name} cannot be drawn`];
+  const draw = (skin) => renderSkin({ selected: skin, data, env, now, warningStore, scripts, runScripts }) ?? [`gamebar: skin ${skin.name} cannot be drawn`];
+  try {
+    return draw(selected);
+  } catch (err) {
+    // A skin that throws while it is drawn (a defect, or a value its checks let through) gives way
+    // to the default game's default skin, with a warning, so the bar never goes blank for it. When
+    // the default throws too (a payload nothing can draw), the error goes to the caller, which keeps
+    // its last frame.
+    const fallback = findSkin(defaultGame().defaultSkin, env);
+    if (!fallback || fallback.file === selected.file) throw err;
+    const failed = makeWarning({ key: `render|failed|${selected.name}`, cause: "render-failed", subject: selected.name,
+      message: `skin ${selected.name} failed to draw (${err && err.message ? err.message : err}); drawing ${fallback.name}` });
+    return draw({ ...fallback, warnings: [...(fallback.warnings || []), failed] });
+  }
 }
 
 // The skin's game style: its variables and line sets, each checked, from the game's manifest.

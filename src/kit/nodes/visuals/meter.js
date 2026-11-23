@@ -2,7 +2,7 @@
 // gaps between glyphs are the only part that shrinks: at its minimum the glyphs stand side by side.
 
 import { define } from "../define.js";
-import { param } from "../schema.js";
+import { param, MAX_COLUMNS } from "../schema.js";
 import { pyround } from "../../ansi.js";
 import { vlen } from "../../text.js";
 import { block, blank, pad, paintRgb, rgbOf, fgEsc, TEXT } from "../paint.js";
@@ -14,12 +14,12 @@ export const meterKind = define({
   container: false,
   accepts: ["percent"],
   params: {
-    count: param("integer", 10, "Glyphs in the meter", { min: 1, measured: true }),
+    count: param("integer", 10, "Glyphs in the meter", { min: 1, max: MAX_COLUMNS, measured: true }),
     glyph: param("text", "■", "A filled glyph", { measured: true }),
     half_glyph: param("text", "", "A half-filled glyph; empty rounds to whole glyphs", { measured: true }),
     empty_glyph: param("text", "■", "An empty glyph", { measured: true }),
     empty_color: param("color", "#5a5f78", "Colour of the empty glyphs"),
-    gap: param("integer", 0, "Spaces between glyphs when there is room", { min: 0, measured: true }),
+    gap: param("integer", 0, "Spaces between glyphs when there is room", { min: 0, max: MAX_COLUMNS, measured: true }),
     invert: param("boolean", false, "Fill by what is left (100 minus the value)"),
     from: param("text", "start", "The end the meter fills from", { allowed: ["start", "end"] }),
     direction: param("text", "horizontal", "The meter's direction; vertical is not available in this version", { allowed: ["horizontal"] }),

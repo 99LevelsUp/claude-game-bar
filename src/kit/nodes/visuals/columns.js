@@ -4,7 +4,7 @@
 // the columns it has.
 
 import { define } from "../define.js";
-import { param } from "../schema.js";
+import { param, MAX_COLUMNS } from "../schema.js";
 import { pyround } from "../../ansi.js";
 import { block, blank, paintRgb, fgEsc, bgEsc, trackRgb, TEXT } from "../paint.js";
 
@@ -33,7 +33,7 @@ export const columnsKind = define({
   accepts: ["channels", "series"],
   params: {
     ramp: param("text", " ▁▂▃▄▅▆▇█", "Characters of a column from empty to full"),
-    column_width: param("integer", 1, "Columns each channel takes", { min: 1, measured: true }),
+    column_width: param("integer", 1, "Columns each channel takes", { min: 1, max: MAX_COLUMNS, measured: true }),
     fit: param("text", "all", "all keeps every channel; as_many_as_fit shows as many as fit", { allowed: ["all", "as_many_as_fit"] }),
   },
   size(r) {

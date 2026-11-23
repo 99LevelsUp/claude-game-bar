@@ -1,6 +1,6 @@
 // The parameters of the containers (docs/ideation/2026-11-20-skin-component-system.md §3).
 
-import { param, PLACES } from "../schema.js";
+import { param, PLACES, MAX_COLUMNS } from "../schema.js";
 
 const node = (meaning) => param("node", null, meaning);
 
@@ -16,7 +16,7 @@ export const LIST_PARAMS = {
   direction: param("text", "horizontal", "The main axis", { allowed: ["horizontal", "vertical"] }),
   align: param("text", "start", "Where the children sit along the main axis when there is room to spare", { allowed: ["start", "center", "end", "between"] }),
   cross: param("text", "start", "Where each child sits across the main axis; stretch gives every child the list's full cross size", { allowed: ["start", "center", "end", "stretch"] }),
-  gap: param("integer", 0, "Room between children", { min: 0, measured: true }),
+  gap: param("integer", 0, "Room between children", { min: 0, max: MAX_COLUMNS, measured: true }),
   separator: param("text", "", "A glyph drawn in each gap", { measured: true }),
   cut: param("text", null, "The end that loses children first; the default is the open end, away from align", { allowed: ["start", "end"] }),
 };
@@ -29,12 +29,12 @@ export const BOX_PARAMS = {
   fill: param("color", "none", "A background behind the whole box", { keywords: ["none"] }),
   border: param("text", "none", "A frame around the box: none, or a line set (light, heavy, double, rounded, ascii, block, or one of the game's)"),
   border_color: param("color", null, "The frame's colour"),
-  padding: param("integer", 0, "Room inside the frame on the left and the right", { min: 0, measured: true }),
+  padding: param("integer", 0, "Room inside the frame on the left and the right", { min: 0, max: MAX_COLUMNS, measured: true }),
 };
 
 export const GRID_PARAMS = {
   children: param("nodes", [], "The cells' nodes, left to right, `columns` per row"),
-  columns: param("integer", null, "Cells per row; all children in one row when not set", { min: 1, measured: true }),
+  columns: param("integer", null, "Cells per row; all children in one row when not set", { min: 1, max: MAX_COLUMNS, measured: true }),
   lines: param("text", "light", "The lines around and between the cells: a line set, or none"),
   line_color: param("color", null, "The colour of the lines"),
   fill: param("color", "none", "The background of the cells", { keywords: ["none"] }),
