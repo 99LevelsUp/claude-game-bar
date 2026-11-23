@@ -92,6 +92,13 @@ Saved skin choices keep working.
   though their bars had room to give. Children that grow now shrink first, so the values keep
   `4h48m`, `3d20h` and `55%` until the bars are at their minimum. The context and RAM
   percentages take a reset time's five columns, so the four USAGE bars are one length.
+- A meter given a width between its gap steps left the extra columns blank after it, and the
+  columns rounding left over always went to the first child of a list. A meter now asks for its
+  room in whole gap steps, and those columns go to the child furthest from its natural size, so
+  the Minecraft hunger keeps its spaces next to the hearts on a narrow terminal.
+- **Minecraft:** two spaces between the hearts and one between the shanks when there is room, as
+  proposed in #84 by @mostodont01 (the hotbar items were already centred in their equal slots).
+  The extra spaces come from room to spare, so the HUD is as wide as before.
 - Claude Code cut the bar's right end with `…` (#37): it draws the status line 2 columns in and
   keeps the last 2 columns free, and the bar counted only the first 2. The bar now takes the
   terminal's width less 4 columns (`GAMEBAR_INDENT`, default 4), so a terminal too narrow for it

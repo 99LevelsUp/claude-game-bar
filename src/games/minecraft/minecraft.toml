@@ -42,9 +42,12 @@ kind = "list"
 align = "between"
 children = ["hearts", "hunger"]
 
-# A heart is one column, a shank of hunger two: a space between the hearts gives both rows of ten
-# about the same length. A session without a 5h limit (an API key, or before the first answer) has
-# every heart.
+# A heart is one column, a shank of hunger two: two spaces between the hearts and one between the
+# shanks give both rows of ten about the same length, and the shanks room to breathe (PR #84). The
+# row's natural width (`width`) is what it was before: one space between the hearts, none between
+# the shanks; the second space and the shanks' space come from room to spare (`grow`, up to `gap`),
+# so they never widen the HUD and go first when the terminal is narrow. A session without a 5h
+# limit (an API key, or before the first answer) has every heart.
 [element.hearts]
 kind = "meter"
 metric = "ratelimit.5h"
@@ -53,7 +56,9 @@ glyph = "♥"
 empty_glyph = "♡"
 color = "#ff3b3b"
 empty_color = "#c07070"
-gap = 1
+gap = 2
+width = 19
+grow = 1
 invert = true
 empty = "full"
 priority = 3
@@ -64,6 +69,9 @@ metric = "context.hp"
 count = 10
 glyph = "🍖"
 empty_glyph = "🦴"
+gap = 1
+width = 20
+grow = 1
 invert = true
 from = "end"
 priority = 3
