@@ -25,7 +25,7 @@ const payload = JSON.stringify({
 
 const env = {
   ...process.env, ...sandboxEnv(sandbox), COLUMNS: "200",
-  GAMEBAR_GLYPHS: "octant", GAMEBAR_SKIN: "doom-full", GAMEBAR_RATELIMITS_SHARE: "0", GAMEBAR_MSYS_REAP: "0",
+  GAMEBAR_GLYPHS: "octant", GAMEBAR_SKIN: "doom", GAMEBAR_RATELIMITS_SHARE: "0", GAMEBAR_MSYS_REAP: "0",
 };
 
 function run() {

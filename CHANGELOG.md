@@ -64,7 +64,9 @@ Saved skin choices keep working.
   counts (their shares are the `.share` metrics). Whatever draws them formats them, so a narrow
   bar can take the compact form (`4h` instead of `4h59m`). A skin script that read these values
   as text gets numbers now. The chat's facts (`{cost}`, `{reset5h}`, `{clock}`, `{tasks}`,
-  `{saved}`, ...) keep their display strings; `{saved}` and `{lingua}` read "1.2k 23%", the share
+  `{saved}`, ...) stay display strings of the same form, written by the same bounded formatters:
+  a reset of 10 hours or more drops its minutes (`12h`), a cost of $100 or more its cents, and
+  more than 99 tasks show only the done count. `{saved}` and `{lingua}` read "1.2k 23%", the share
   replacing LLMLingua's ratio.
 
 ### Removed
