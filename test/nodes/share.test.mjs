@@ -24,6 +24,10 @@ const CASES = [
   ["a column left over goes to the earliest child that can take it", [kid(2, 6), kid(2, 6)], 9, [5, 4]],
   ["a stepped child shrinks in whole steps; the leftover goes to the next", [kid(2, 8, { step: 3 }), kid(0, 4)], 8, [5, 3]],
   ["at or below the minimum, every child at its minimum", [kid(2, 6), kid(3, 6)], 4, [2, 3]],
+  ["short of room, a child that grows gives first: the bar narrows, the value keeps its full form",
+    [kid(3, 12, { grow: 1 }), kid(3, 5)], 14, [9, 5]],
+  ["once the growing child is at its minimum, the others shrink", [kid(3, 12, { grow: 1 }), kid(3, 5)], 7, [3, 4]],
+  ["growing children share what is left by their own ranges", [kid(2, 10, { grow: 1 }), kid(2, 6, { grow: 1 }), kid(4, 4)], 12, [5, 3, 4]],
 ];
 for (const [what, kids, room, want] of CASES) {
   const got = share(kids, room);
