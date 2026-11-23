@@ -92,7 +92,15 @@ try {
     rmSync(THEME_FILE);
     s = select({ GAMEBAR_PRESET: mine });
     ok(s.name === defaultGame().defaultSkin && s.warnings.length === 0,
-      `no theme + ~/my.toml -> the default game's default skin (${s.name}); the default game reads no presets, so nothing to warn`);
+      `no theme + ~/my.toml -> the default game's default skin (${s.name}); no game has that size, so nothing to warn`);
+    // An older install's preset with no theme drew DOOM at that size (DOOM was the default game
+    // before 3.0.0): it still does, as `install --preset` picks the first game with the size.
+    s = select({ GAMEBAR_PRESET: path.join(OLD_PRESETS, "minimal.toml") });
+    ok(s.name === "doom-minimal" && s.warnings.length === 0, `no theme + an older install's minimal.toml -> doom-minimal (${s.name})`);
+    s = select({ GAMEBAR_PRESET: path.join(OLD_PRESETS, "full.toml") });
+    ok(s.name === "doom", `no theme + full.toml -> doom, the tall bar 2.x's doom-full now draws (${s.name})`);
+    s = select({ GAMEBAR_THEME: defaultGame().name, GAMEBAR_PRESET: path.join(OLD_PRESETS, "minimal.toml") });
+    ok(s.name === defaultGame().defaultSkin, `a chosen default theme keeps the default game whatever the preset (${s.name})`);
     s = select();
     ok(s.name === defaultGame().defaultSkin && s.warnings.length === 0, "nothing chosen at all -> the default game's default skin");
 

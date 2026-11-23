@@ -23,8 +23,8 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
-import { findGame, defaultGame, bundledSkins, bundledSkin, legacySkin } from "./games/index.js";
-import { currentTheme } from "./theme.js";
+import { GAMES, findGame, defaultGame, bundledSkins, bundledSkin, legacySkin } from "./games/index.js";
+import { chosenTheme } from "./theme.js";
 import { envGet } from "./platform/env.js";
 import { userDir } from "./platform/runtime.js";
 import { makeWarning } from "./kit/skin/warnings.js";
@@ -100,6 +100,9 @@ export function nextSkin(name, env = process.env) {
 
 const warning = (cause, subject, message) => makeWarning({ key: `selection|${cause}|${subject}`, cause, subject, message });
 
+// The size a preset setting names: its file name without `.toml` ("minimal" for .../minimal.toml).
+const presetSize = (preset) => preset.split(/[\\/]/).pop().replace(/\.toml$/, "");
+
 export function selectSkin(env = process.env) {
   const warnings = [];
   const preset = envGet("PRESET", env) || "";
@@ -108,7 +111,7 @@ export function selectSkin(env = process.env) {
   const sized = (skin) => {
     const game = skin.game;
     if (!preset || !game || !game.readsPresets) return skin;
-    const size = preset.split(/[\\/]/).pop().replace(/\.toml$/, "");
+    const size = presetSize(preset);
     const other = Object.hasOwn(game.presetSkins, size) ? findSkin(game.presetSkins[size], env) : null;
     if (other) return other;
     warnings.push(warning("old-preset", preset,
@@ -131,6 +134,14 @@ export function selectSkin(env = process.env) {
     }
     warnings.push(warning("unknown-skin", saved, `no skin is called ${saved} (the saved skin)`));
   }
-  const game = findGame(currentTheme(env)) || defaultGame();
+  const chosen = chosenTheme(env);
+  let game = findGame(chosen) || defaultGame();
+  // A preset an older `install` wrote, with no theme chosen: before 3.0.0 the default game was DOOM,
+  // which read it, so it still picks the size of the first game that has one of that name, as
+  // `install --preset` does (bin/cli.js).
+  if (!chosen && preset && !game.readsPresets) {
+    const sizedGame = GAMES.find((g) => g.readsPresets && Object.hasOwn(g.presetSkins, presetSize(preset)));
+    if (sizedGame) game = sizedGame;
+  }
   return pick(sized(findSkin(game.defaultSkin, env)), "legacy");
 }

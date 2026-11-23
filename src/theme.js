@@ -47,9 +47,15 @@ function savedTheme(env) {
 // Current theme: $GAMEBAR_THEME wins (handy for a one-off), then the saved file, then the default
 // game. Anything unknown or unreadable falls back to the default, so a bad file can never blank the HUD.
 export function currentTheme(env = process.env) {
+  return chosenTheme(env) || defaultGame().name;
+}
+
+// The theme the user chose ($GAMEBAR_THEME, then the saved file), or null when none is: the default
+// game is then the theme only by default.
+export function chosenTheme(env = process.env) {
   let t = envGet("THEME", env);
   if (!t) t = savedTheme(env);
-  return resolveTheme(t) || defaultGame().name;
+  return resolveTheme(t);
 }
 
 // The old theme file is not removed here: the old package may still run (`install --keep-old`, or
