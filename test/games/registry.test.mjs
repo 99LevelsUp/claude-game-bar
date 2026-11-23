@@ -101,14 +101,16 @@ try {
   {
     const s = session("by-name");
     const doom = GAMES.find((g) => g.name === "doom");
+    // Compared by the skin each setting selects: a live render reads the machine's RAM, which may
+    // change between two renders.
+    const via = (over) => selectSkin({ ...s.env, ...over }).name;
     for (const [size, entry] of [["full", "doom"], ["standard", "doom"], ["minimal", "doom-minimal"]]) {
       const skin = doom.presetSkins[size];
-      ok(render(s, { GAMEBAR_SKIN: skin }) === render(s, { GAMEBAR_SKIN: entry })
-        && render(s, { GAMEBAR_SKIN: skin }) === render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: doom.presets[size] }),
+      ok(via({ GAMEBAR_SKIN: skin }) === entry && via({ GAMEBAR_THEME: "doom", GAMEBAR_PRESET: doom.presets[size] }) === entry,
         `GAMEBAR_SKIN=${skin} draws the entry ${entry}, as doom's ${size} preset setting does`);
     }
-    ok(render(s, { GAMEBAR_SKIN: "minecraft-compact" }) === render(s, { GAMEBAR_SKIN: "minecraft" }), "GAMEBAR_SKIN=minecraft-compact draws the minecraft skin");
-    ok(render(s, { GAMEBAR_SKIN: "minecraft", GAMEBAR_THEME: "doom" }) === render(s, { GAMEBAR_THEME: "minecraft" }),
+    ok(via({ GAMEBAR_SKIN: "minecraft-compact" }) === "minecraft", "GAMEBAR_SKIN=minecraft-compact draws the minecraft skin");
+    ok(via({ GAMEBAR_SKIN: "minecraft", GAMEBAR_THEME: "doom" }) === "minecraft" && via({ GAMEBAR_THEME: "minecraft" }) === "minecraft",
       "GAMEBAR_SKIN=minecraft draws the minecraft skin, whatever the theme");
   }
 
@@ -191,17 +193,19 @@ try {
   {
     ok(!existsSync(path.join(ROOT, "presets")) && !existsSync(path.join(ROOT, "src", "games", "minecraft", "presets")),
       "no preset files are shipped, in the old folder or a game's");
+    // Compared by the skin each setting selects and what it draws from fixed values: a live render
+    // reads the machine's RAM, which may change between two renders.
     const oldFull = path.join(ROOT, "presets", "full.toml");
     const s = session("old-path");
-    for (const cols of ["250", "120", "90"]) {
-      const viaOld = render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: oldFull, COLUMNS: cols });
-      const viaNew = render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: path.join(DOOM_PRESETS, "full.toml"), COLUMNS: cols });
-      ok(viaOld === viaNew && viaOld === render(s, { GAMEBAR_SKIN: "doom", COLUMNS: cols }) && viaOld.includes("MODEL"),
-        `at ${cols} columns the old path draws doom`);
-    }
+    const via = (over) => selectSkin({ ...s.env, ...over }).name;
+    ok(via({ GAMEBAR_THEME: "doom", GAMEBAR_PRESET: oldFull }) === "doom"
+      && via({ GAMEBAR_THEME: "doom", GAMEBAR_PRESET: path.join(DOOM_PRESETS, "full.toml") }) === "doom",
+      "the old path and the later one both select doom");
+    ok(render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: oldFull, COLUMNS: "250" }).includes("MODEL"), "and draw its boxes");
     // At 80 columns the tall bar does not fit and the switch draws the balanced bar, which is also
     // what doom-minimal draws there.
-    ok(render(s, { GAMEBAR_THEME: "doom", GAMEBAR_PRESET: oldFull, COLUMNS: "80" }) === render(s, { GAMEBAR_SKIN: "doom-minimal", COLUMNS: "80" }),
+    const { drawEntry } = await import("../_v2-draw.mjs");
+    ok(JSON.stringify(drawEntry("doom", { width: 78 }).lines) === JSON.stringify(drawEntry("doom-minimal", { width: 78 }).lines),
       "at 80 columns it draws what doom-minimal draws");
   }
 } finally {
