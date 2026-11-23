@@ -37,6 +37,12 @@ export function measureList(r, ctx, p = r.p) {
   };
 }
 
+// The end a list loses children from: as written, else the open end, away from its alignment.
+export const listCutEnd = (p) => p.cut ?? (p.align === "end" ? "start" : "end");
+// A list that stretches its children across stretches itself across its row too, so the boxes
+// beside an anchor's centre are as tall as the bar.
+export const listStretches = (p) => p.cross === "stretch" && p.direction !== "vertical";
+
 export function listRooms(r, room, ctx, p = r.p) {
   const vertical = p.direction === "vertical";
   return visible(r, ctx).map((k) => [k, vertical ? { w: room.w, h: null } : { w: null, h: room.h }]);
@@ -110,6 +116,9 @@ export const listKind = define({
   container: true,
   holds: "children",
   params: LIST_PARAMS,
+  cutEnd: (p) => listCutEnd(p),
+  column: (p) => p.direction === "vertical",
+  stretchesAcross: (p) => listStretches(p),
   measure: (r, ctx) => measureList(r, ctx),
   rooms: (r, room, ctx) => listRooms(r, room, ctx),
   place: (r, w, h, ctx) => placeList(r, w, h, ctx),

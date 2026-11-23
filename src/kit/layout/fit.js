@@ -37,10 +37,8 @@
 // path, subject, message }): a switch condition that reads a name nothing defines.
 
 import { evaluate, truthy } from "./expr.js";
-import { decoLevels, measureBox } from "../nodes/containers/box.js";
 import { activeCase } from "../nodes/containers/switch.js";
 import { visible } from "../nodes/containers/list.js";
-import { COLUMNS } from "../nodes/containers/anchor.js";
 
 const LIMIT = 400; // relief steps per render: a safety net, never reached by a sane skin
 
@@ -49,7 +47,8 @@ const LIMIT = 400; // relief steps per render: a safety net, never reached by a 
 // Every child of a node, active or not.
 const allKids = (r) => [...r.kids, ...Object.values(r.places), ...r.cases.map((c) => c.r)];
 // The children that take part in this render's layout: a switch's active case only.
-const activeKids = (r) => (r.kind === "switch" ? [activeCase(r)].filter(Boolean) : [...r.kids, ...Object.values(r.places)]);
+const oneOf = (r) => r.desc.holds === "cases";
+const activeKids = (r) => (oneOf(r) ? [activeCase(r)].filter(Boolean) : [...r.kids, ...Object.values(r.places)]);
 
 // The fit's modes: a node with nothing to show collapses, unless it keeps its place (blank): a leaf
 // at its minimum size, a container with its decoration (a box its frame and title) around children
@@ -121,14 +120,14 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     if (r[key] !== undefined) return r[key];
     let s;
     if (!r.desc.container) s = settle(r, leafSize(r));
-    else if (r.kind === "switch") {
+    else if (oneOf(r)) {
       const fs = r.cases.filter((c) => holds(c, whenRoom(r))).map((c) => floor(c.r, false)).filter(Boolean);
       s = fs.length ? settle(r, {
         min: Math.min(...fs.map((x) => x.min)), nat: Math.min(...fs.map((x) => x.nat)), max: Infinity,
         rows: Math.min(...fs.map((x) => x.rows)), minRows: Math.min(...fs.map((x) => x.minRows)),
       }) : null;
     } else {
-      const m = r.kind === "box" ? measureBox(r, floorCtx, Math.max(...decoLevels(r.p))) : r.desc.measure(r, floorCtx);
+      const m = r.desc.floor ? r.desc.floor(r, floorCtx) : r.desc.measure(r, floorCtx);
       const any = activeKids(r).some((k) => floor(k, false)) || r.cases.length;
       s = !any && r.mode !== "blank" ? null : settle(r, m);
     }
@@ -169,7 +168,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     return last < 0 ? s.cases.length - 1 : last;
   }
   function chooseCases(r, room) {
-    if (r.kind === "switch" && r.cases.length) r.caseIdx = firstCase(r, room, room);
+    if (oneOf(r) && r.cases.length) r.caseIdx = firstCase(r, room, room);
     for (const k of allKids(r)) chooseCases(k, room);
   }
   chooseCases(root, rootRoom);
@@ -180,7 +179,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
   // again with their conditions read there; the floors they are measured by are unchanged, so a
   // switch without conditions starts where it did. A switch nested in one that changes case is
   // placed by the case it now draws.
-  const hasWhen = (r) => r.kind === "switch" && r.cases.some((c) => c.when);
+  const hasWhen = (r) => oneOf(r) && r.cases.some((c) => c.when);
   function placeConditions(r, room) {
     if (hasWhen(r)) {
       r.whenRoom = room;
@@ -188,7 +187,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
       if (idx !== r.caseIdx) { r.caseIdx = idx; invalidate(r); }
     }
     if (!r.desc.container) return;
-    if (r.kind === "switch") { for (const c of r.cases) placeConditions(c.r, room); return; }
+    if (oneOf(r)) { for (const c of r.cases) placeConditions(c.r, room); return; }
     for (const [k, kr] of r.desc.rooms(r, room, ctx)) placeConditions(k, { w: kr.w ?? room.w, h: kr.h ?? room.h });
   }
   const anyWhen = (r) => hasWhen(r) || allKids(r).some(anyWhen);
@@ -228,10 +227,10 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     const boxes = [], optional = [], switches = [];
     const walk = (r, isTop) => {
       if (!size(r)) return;
-      if (r.kind === "box") boxes.push(r); // a box's own decoration is inside its subtree
+      if (r.desc.decoLevels) boxes.push(r); // a box's own decoration is inside its subtree
       if (!isTop || withTop) {
         if (r.p.priority !== null && r.p.priority !== undefined && r !== root) optional.push(r);
-        if (r.kind === "switch") switches.push(r);
+        if (oneOf(r)) switches.push(r);
       }
       for (const k of activeKids(r)) walk(k, false);
     };
@@ -240,7 +239,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     // give up (no title implies no padding), so a step that alone wins nothing is passed over.
     const deco = [];
     for (const b of boxes) {
-      for (const level of decoLevels(b.p).filter((l) => l > (b.deco || 0))) {
+      for (const level of b.desc.decoLevels(b.p).filter((l) => l > (b.deco || 0))) {
         deco.push({ level, apply: () => { b._prev = b.deco; b.deco = level; invalidate(b); }, revert: () => { b.deco = b._prev; invalidate(b); } });
       }
     }
@@ -255,7 +254,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     // row, hearts and hunger side by side), then those under one column (the share in each row of a
     // box, every row as wide as the box).
     const column = (o) => {
-      for (let a = o.parent; a; a = a.parent) if (a.kind === "box" || a.p.direction === "vertical") return a.path;
+      for (let a = o.parent; a; a = a.parent) if (a.desc.column && a.desc.column(a.p)) return a.path;
       return "";
     };
     const drops = [];
@@ -293,11 +292,11 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
   // How far a node is from its list's cut end: 0 for the child that goes first.
   function cutDistance(k) {
     const parent = k.parent;
-    if (!parent || !["list", "box", "grid"].includes(parent.kind)) return 0;
+    if (!parent || !parent.desc.cutEnd) return 0;
     const vis = visible(parent, ctx);
     const i = vis.indexOf(k);
     if (i < 0) return 0;
-    const cut = parent.p.cut ?? (parent.kind === "grid" ? "end" : parent.p.align === "end" ? "start" : "end");
+    const cut = parent.desc.cutEnd(parent.p);
     return cut === "end" ? vis.length - 1 - i : i;
   }
 
@@ -323,20 +322,20 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     for (const dim of ["h", "w"]) {
       const ex = () => excess(r, room, dim);
       if (ex() === 0) continue;
-      if (r.kind === "anchor") {
+      if (r.desc.centre) {
         const rooms = r.desc.rooms(r, room, ctx);
-        const centre = new Set(COLUMNS[1].map((pl) => r.places[pl]).filter(Boolean));
+        const centre = new Set(r.desc.centre(r));
         for (const [k, kr] of rooms) {
           if (centre.has(k) || excess(k, kr, dim) === 0) continue;
           if (trySteps(candidates(k, true), ex)) return true;
         }
-        if (dim === "w" && r.p.balance !== "free" && !r.centreGives) {
+        if (dim === "w" && r.desc.centreMayGive && r.desc.centreMayGive(r.p) && !r.centreGives) {
           if (tryActions([{ apply: () => { r.centreGives = true; invalidate(r); }, revert: () => { r.centreGives = false; invalidate(r); } }], ex)) return true;
         }
         for (const k of centre) if (trySteps(candidates(k, true), ex)) return true;
       } else if (trySteps(candidates(r, false), ex)) return true;
     }
-    if (r.kind === "switch") {
+    if (oneOf(r)) {
       const next = nextCase(r, room);
       if (next >= 0) { r.caseIdx = next; invalidate(r); return true; }
     }
@@ -361,7 +360,7 @@ export function fitTree(root, { width, rows, env = {}, report = () => {} } = {})
     out.kids = placed.kids.map(([k, kw]) => place(k, kw.w, kw.h));
     return out;
   }
-  const fills = (r) => (r.kind === "switch" ? !!activeCase(r) && fills(activeCase(r)) : !!r.desc.fills);
+  const fills = (r) => (oneOf(r) ? !!activeCase(r) && fills(activeCase(r)) : !!r.desc.fills);
   const s = size(root);
   if (!s) return { tree: null, width: 0, rows: 0, clipped: false, fills: false };
   const doesFill = fills(root);

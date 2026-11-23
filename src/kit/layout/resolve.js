@@ -64,8 +64,9 @@ function resolveNode(node, scope, parent, env) {
     parent, depth: parent ? parent.depth + 1 : 0,
     kids: [], places: {}, cases: [],
   };
-  // A box with a fill draws its children on it (§7.3).
-  const inner = node.kind === "box" && p.fill && p.fill !== "none" ? { ...r, background: p.fill } : r;
+  // A container with a surface (a box's fill) draws its children on it (§7.3).
+  const surface = node.desc.surface ? node.desc.surface(p) : null;
+  const inner = surface ? { ...r, background: surface } : r;
   r.kids = node.children.map((c) => resolveNode(c, s, inner, env));
   for (const [k, c] of Object.entries(node.places)) r.places[k] = resolveNode(c, s, r, env);
   r.cases = node.cases.map((c) => ({ when: c.when, r: resolveNode(c.node, s, r, env) }));
@@ -73,7 +74,7 @@ function resolveNode(node, scope, parent, env) {
 
   if (node.desc.container) {
     // A container has nothing to show when nothing under it has.
-    const under = node.kind === "switch" ? r.cases.map((c) => c.r) : [...r.kids, ...Object.values(r.places)];
+    const under = node.desc.holds === "cases" ? r.cases.map((c) => c.r) : [...r.kids, ...Object.values(r.places)];
     r.empty = truthy(p.empty_when) || under.every((k) => k.empty);
   }
   return r;

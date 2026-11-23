@@ -60,6 +60,7 @@ function drawImage(file, p, width, height, env, surface, canvas) {
 export const spriteKind = define({
   name: "sprite",
   container: false,
+  pixels: true,
   accepts: ANY_TYPE,
   params: {
     frames: param("asset", "", "The folder of frame images"),

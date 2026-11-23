@@ -167,7 +167,10 @@ takes its width from its value's type, through the bounded formatters (`src/metr
 never from the current value, so a value never moves the bar. Each kind is a descriptor in
 `src/kit/nodes/` that lists its parameters (meaning, type, default, allowed values) and how it
 measures and draws. A new kind, such as a minimap, is platform work there, and every game can use
-it. Any parameter may be an expression over the game's variables and the metric values
+it. The fit, the loader and the containers name no kind: what only some kinds do (a box's
+decoration levels, the end a list is cut from, an anchor's centre, a switch's cases, a sprite drawn
+under glyph layers) they ask of the descriptor through optional hooks, listed in
+`src/kit/nodes/define.js`, so a new kind needs no change to the engine. Any parameter may be an expression over the game's variables and the metric values
 (`src/kit/layout/expr.js`), parsed by the bar and never run as JavaScript.
 
 Bundled skins live in `src/games/<game>/<game>.toml`; a user's own skins in

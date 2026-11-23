@@ -56,6 +56,8 @@ export const anchorKind = define({
   holds: "places",
   fills: true,
   params: ANCHOR_PARAMS,
+  centre: (r) => COLUMNS[1].map((pl) => r.places[pl]).filter(Boolean),
+  centreMayGive: (p) => p.balance !== "free",
   measure(r, ctx) {
     const { cols: [L, C, R], rows } = tracks(r, ctx);
     const mirror = r.p.balance !== "free";
@@ -93,9 +95,7 @@ export const anchorKind = define({
       const ci = COLUMNS.findIndex((c) => c.includes(pl));
       const cw = widths[ci], th = heights[t];
       const kw = k.p.grow > 0 ? Math.max(s.min, Math.min(cw, s.max)) : Math.max(Math.min(s.nat, cw), Math.min(s.min, cw));
-      // A list that stretches its children across stretches itself across its row too, so the
-      // boxes beside a centre are as tall as the bar.
-      const stretch = (k.kind === "list" || k.kind === "box") && k.p.cross === "stretch" && k.p.direction !== "vertical";
+      const stretch = typeof k.desc.stretchesAcross === "function" && k.desc.stretchesAcross(k.p);
       const kh = stretch ? th : Math.max(Math.min(s.rows, th), Math.min(s.minRows, th));
       kids.push([k, { w: kw, h: kh }]);
       at[pl] = { column: ci, track: t };
