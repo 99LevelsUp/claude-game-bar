@@ -3,6 +3,8 @@
 // ids with their own placement paths, references with variables, repeat, and reports that never
 // stop the rest of the skin from loading.
 
+import { mkdtempSync, writeFileSync, utimesSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
@@ -22,6 +24,27 @@ ok(Object.keys(f.entries).join(",") === "wide,narrow,slots", "every [skin.<name>
 ok(f.entries.wide.root.id === "bar" && f.entries.narrow.root.id === "line", "each entry has its root");
 ok(f.entries.narrow.vars.accent === "#00ff00", "an entry keeps its own vars");
 ok(loadSkinFile(fixture) === f, "a file is loaded once and cached");
+ok(Object.isFrozen(f) && Object.isFrozen(f.entries.wide.root) && Object.isFrozen(f.entries.wide.root.params) && Object.isFrozen(f.warnings),
+  "the cached result is frozen, so one render cannot change it for the next");
+{
+  // An edited file is read again: the daemon draws the new skin without a restart.
+  const dir = mkdtempSync(path.join(os.tmpdir(), "gamebar-load-"));
+  try {
+    const file = path.join(dir, "edited.toml");
+    writeFileSync(file, `version = 2\n[skin.first]\nroot = "a"\n[element.a]\nkind = "label"\ntext = "one"\n`);
+    const before = loadSkinFile(file);
+    // The same size, so only the time tells the edit apart.
+    writeFileSync(file, `version = 2\n[skin.other]\nroot = "a"\n[element.a]\nkind = "label"\ntext = "two"\n`);
+    const later = new Date(Date.now() + 5000);
+    utimesSync(file, later, later);
+    const after = loadSkinFile(file);
+    ok(after !== before && Object.keys(after.entries).join(",") === "other" && after.entries.other.root.params.text.lit === "two",
+      `the next load after an edit returns the new tree (${Object.keys(after.entries).join(",")})`);
+    ok(loadSkinFile(file) === after, "and caches it in turn");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 console.log("inline nodes, references and shared ids:");
 const tall = f.entries.wide.root.cases[0].node;
