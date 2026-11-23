@@ -16,6 +16,9 @@ import { entryOf } from "../../src/skin-assets.js";
 import { resolveTree } from "../../src/kit/layout/resolve.js";
 import { createScope } from "../../src/kit/layout/vars.js";
 import { fitTree } from "../../src/kit/layout/fit.js";
+import { renderSession } from "../../src/render.js";
+
+const strip = (s) => s.replace(/\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g, "");
 
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
@@ -74,6 +77,11 @@ try {
   mkdirSync(path.join(user, "skins", "old"), { recursive: true });
   writeFileSync(path.join(user, "skins", "old", "old.toml"), `version = 1\nroot = "a"\n[element.a]\nkind = "row"\n`);
   ok(entryOf(findSkin("old", env())) === null, "a user skin in the old format has no entry to draw");
+  const out = renderSession({ data: { session_id: "old", model: { display_name: "Opus 5.5" } },
+    env: { ...process.env, ...env({ GAMEBAR_SKIN: "old", COLUMNS: "120" }) }, now: 1793500000, scripts: false }).map(strip);
+  const warned = out.filter((l) => l.startsWith("gamebar:"));
+  ok(out[0].includes("plain") && warned.length === 1 && /before 3\.0\.0/.test(warned[0]),
+    `it falls back to the default game with one warning line (${JSON.stringify(warned)})`);
 } finally {
   GAMES.splice(GAMES.indexOf(fx), 1);
   GAMES.splice(GAMES.indexOf(fxDefault), 1);

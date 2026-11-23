@@ -1,5 +1,5 @@
 // The platform's conversation library: questions and answers about the session's metrics. Every
-// chat plays it (src/kit/elements/chat.js), in the one-shot status line too; a skin's own libraries
+// chat plays it (src/kit/nodes/visuals/chat.js), in the one-shot status line too; a skin's own libraries
 // are scripts that replace, drop or add to its conversations by key.
 //
 // A conversation library is a function of the session's facts that returns the conversations that

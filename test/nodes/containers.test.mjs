@@ -8,7 +8,7 @@ import { buildSkinFile } from "../../src/kit/layout/load.js";
 import { resolveTree } from "../../src/kit/layout/resolve.js";
 import { createScope } from "../../src/kit/layout/vars.js";
 import { fitTree } from "../../src/kit/layout/fit.js";
-import { drawFit } from "../../src/kit/layout/draw.js";
+import { drawFit, clipLine } from "../../src/kit/layout/draw.js";
 import { vlen } from "../../src/kit/text.js";
 
 let fails = 0;
@@ -140,6 +140,16 @@ children = [
 const lyLine = render(layers, "s", 6, 1).lines[0];
 ok(plain(lyLine).includes("42") && /\x1b\[48;2;255;0;0m[^\x1b]*\x1b\[[0-9;]*m*42|48;2;255;0;0m\s*42/.test(lyLine.replace(/\x1b\[(?:1|22|39|38;2;[0-9;]+)m/g, "")),
   "a glyph laid over a layer keeps that layer's background");
+
+console.log("a bar too wide is cut at the edge:");
+{
+  const link = "\x1b]8;;https://x.test\x1b\\abcdef\x1b]8;;\x1b\\";
+  const cut = clipLine("\x1b[31m" + link + "ghij", 4);
+  ok(vlen(cut) === 4 && plain(cut) === "abcd" && cut.includes("\x1b]8;;\x1b\\") && cut.endsWith("\x1b[0m"),
+    "the cut line keeps its colours, closes an open hyperlink and resets");
+  ok(plain(clipLine("ab🙂cd", 3)) === "ab ", "a wide glyph that would cross the edge is left out, its column blank");
+  ok(clipLine("abc", 5) === "abc", "a line that fits is left as it is");
+}
 
 console.log("size contract:");
 let exact = true;

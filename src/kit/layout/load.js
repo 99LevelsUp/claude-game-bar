@@ -132,8 +132,8 @@ function buildFile(data, file, add) {
           add("unknown-metric", id, String(m), `binds unknown metric "${String(m)}"; skipped`);
           return null;
         }
-        if (!desc.accepts.includes(CATALOGUE[m].semantic)) {
-          add("type-mismatch", id, m, `kind "${kind}" cannot show metric "${m}" (${CATALOGUE[m].semantic}); skipped`);
+        if (!desc.accepts.includes(CATALOGUE[m].type)) {
+          add("type-mismatch", id, m, `kind "${kind}" cannot show metric "${m}" (${CATALOGUE[m].type}); skipped`);
           return null;
         }
         metric = m;

@@ -43,7 +43,7 @@ function resolveNode(node, scope, parent, env) {
     }
   }
   const metric = node.metric;
-  const type = metric && Object.hasOwn(CATALOGUE, metric) ? CATALOGUE[metric].semantic : null;
+  const type = metric && Object.hasOwn(CATALOGUE, metric) ? CATALOGUE[metric].type : null;
   let value = metric && Object.hasOwn(env.values, metric) ? env.values[metric] : undefined;
   let empty = metric ? isNothing(value) : false;
   if (truthy(p.empty_when)) empty = true;

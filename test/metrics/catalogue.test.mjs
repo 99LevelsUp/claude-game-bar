@@ -11,7 +11,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { CATALOGUE, VALUE_TYPES, SEMANTIC_TYPES } from "../../src/metrics/catalogue.js";
+import { CATALOGUE, VALUE_TYPES } from "../../src/metrics/catalogue.js";
 import { collectValues } from "../../src/metrics/index.js";
 import { buildValues } from "../../src/metrics/session.js";
 import { activityValues } from "../../src/metrics/activity.js";
@@ -24,24 +24,33 @@ const same = (a, b, m) => {
 
 // The shape a value of each type has (see src/metrics/catalogue.js).
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+const unit = (v) => Array.isArray(v) && v.every((x) => isNum(x) && x >= 0 && x <= 1);
 const SHAPE = {
-  percentage: (v) => isNum(v) && v >= 0 && v <= 100,
-  number: isNum,
-  text: (v) => typeof v === "string"
+  percent: (v) => isNum(v) && v >= 0 && v <= 100,
+  count: (v) => isNum(v) && v >= 0,
+  money: (v) => isNum(v) && v >= 0,
+  duration: (v) => isNum(v) && v >= 0,
+  time: (v) => isNum(v) && v >= 0 && v < 86400,
+  ratio: (v) => Array.isArray(v) && v.length === 2 && v.every(isNum),
+  label: (v) => typeof v === "string",
+  name: (v) => typeof v === "string"
     || (v !== null && typeof v === "object" && typeof v.text === "string" && (v.url === null || typeof v.url === "string")),
-  list: Array.isArray,
-  timeseries: (v) => Array.isArray(v) && v.every((x) => isNum(x) && x >= 0 && x <= 1),
+  enum: (v) => typeof v === "string",
+  flags: Array.isArray,
+  counts: Array.isArray,
+  items: Array.isArray,
+  series: unit,
+  channels: unit,
   conversation: Array.isArray,
 };
 const hasEscape = (v) => (typeof v === "string" ? v.includes("\x1b")
   : v && typeof v === "object" ? Object.values(v).some(hasEscape) : false);
 
 // --- The catalogue itself ------------------------------------------------------------------
-ok(VALUE_TYPES.length === 6 && VALUE_TYPES.every((t) => t in SHAPE), "the catalogue names the six value types");
+ok(VALUE_TYPES.length === 15 && VALUE_TYPES.every((t) => t in SHAPE), "the catalogue names the fifteen value types");
 for (const [id, e] of Object.entries(CATALOGUE)) {
-  ok(typeof e.name === "string" && e.name.length > 0 && VALUE_TYPES.includes(e.type),
+  ok(typeof e.name === "string" && e.name.length > 0 && VALUE_TYPES.includes(e.type) && !("semantic" in e),
     `${id}: has a human name and a known value type (${JSON.stringify(e)})`);
-  ok(SEMANTIC_TYPES.includes(e.semantic), `${id}: has a semantic type (${e.semantic})`);
 }
 
 // --- A full session through collectValues --------------------------------------------------

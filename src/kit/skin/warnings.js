@@ -1,6 +1,6 @@
 // The warning line: one dim line under the bar while anything needs the user's attention. Skin parts
 // that were skipped, asset packages that are missing and scripts that failed are collected during
-// the render as warnings ({ key, message, ... }, the form src/kit/skin/load.js gives them); the
+// the render as warnings ({ key, message, ... }, the form src/kit/layout/load.js gives them); the
 // line names the first cause and counts the others. A cause shows for 60 seconds after it first
 // appeared, then stays quiet while it lasts. A cause not seen for more than those 60 seconds has
 // ended: when it comes back, it is new and shows again.

@@ -137,7 +137,7 @@ class Scope {
     const k = this.metricPrefix(path);
     if (!k || k !== path.length) return null;
     const e = this.catalogue[path.join(".")];
-    return e ? e.semantic || null : null;
+    return e ? e.type || null : null;
   }
 
   // The value of variable `name` as layer `layer` defines it, evaluated.

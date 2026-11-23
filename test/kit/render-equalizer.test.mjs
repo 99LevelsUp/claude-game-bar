@@ -1,17 +1,18 @@
 #!/usr/bin/env node
-// The equalizer visual: a one-row VU-meter, one column per channel (such as each CPU core), each
+// The columns visual (once the equalizer): a one-row VU-meter, one column per channel (such as each CPU core), each
 // column as high and as coloured as its OWN value on an absolute 0..1 scale (no span-normalising).
 // Its height ramp " ▁▂▃▄▅▆▇█" has nine levels (index pyround(clamp(v,0,1)*8)), so an idle channel
 // is empty and a maxed one a full block. It draws exactly the columns it is given: more channels
 // than columns are averaged into them, fewer are spread across them.
-import { VISUALS } from "../../src/kit/elements/index.js";
+import { KINDS } from "../../src/kit/nodes/index.js";
 import { vlen } from "../../src/kit/text.js";
 import { OK, CRIT } from "../../src/kit/ansi.js";
 
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
 
-const EQ = VISUALS.equalizer;
+const EQ = KINDS.columns;
+const defaults = Object.fromEntries(Object.entries(EQ.params).map(([k, s]) => [k, s.default]));
 const BOX = [28, 32, 54];         // a box background, like the DOOM boxes
 // Strip ANSI/OSC to count the visible glyph run.
 const ANSI = /\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g;
@@ -20,7 +21,7 @@ const visible = (s) => s.replace(ANSI, "");
 const fgs = (s) => [...s.matchAll(/38;2;(\d+);(\d+);(\d+)m/g)].map((m) => [+m[1], +m[2], +m[3]]);
 // The equalizer of `vals` in `columns` columns (one per channel by default).
 const eq = (vals, extra = {}, columns = Math.max(1, vals.length)) =>
-  EQ.draw({ value: vals, params: EQ.validate(extra).params, width: columns, surface: BOX })[0];
+  EQ.draw({ r: { color: extra.color ?? null }, value: vals, params: defaults, width: columns, height: 1, surface: BOX })[0];
 
 // 1. Happy path: 3 channels -> 3 glyphs at empty/mid/full height.
 {
@@ -73,14 +74,14 @@ const eq = (vals, extra = {}, columns = Math.max(1, vals.length)) =>
   ok(vlen(out) === 5 && visible(out) === "     ", "an empty list draws its columns blank");
 }
 
-// 7. Width: the columns come from the parameters, the icon in front of them.
+// 7. Width: a column per channel, so 4 cores take 4 columns; as_many_as_fit can give way to one.
 {
-  const p = EQ.validate({ icon: "🔥", columns: 16, min_columns: 4 }).params;
-  const w = EQ.widths(p);
-  ok(w.natural === 3 + 16 && w.min === 3 + 4, `natural and minimum width are the icon and the columns (${w.natural}, ${w.min})`);
-  for (const n of [3, 8, 16, 17, 32, 64]) {
-    const line = EQ.draw({ value: Array(n).fill(0.5), params: p, width: w.natural, surface: BOX })[0];
-    ok(vlen(line) === w.natural, `N=${n}: the line is exactly its ${w.natural} columns`);
+  for (const n of [3, 8, 16]) {
+    const all = EQ.size({ p: defaults, value: Array(n).fill(0.5) });
+    const fit = EQ.size({ p: { ...defaults, fit: "as_many_as_fit" }, value: Array(n).fill(0.5) });
+    ok(all.nat === n && all.min === n && fit.nat === n && fit.min === 1, `N=${n}: ${n} columns, and down to one with as_many_as_fit`);
+    const line = eq(Array(n).fill(0.5), {}, n);
+    ok(vlen(line) === n, `N=${n}: the line is exactly its ${n} columns`);
   }
 }
 
