@@ -2,22 +2,23 @@
 // Snapshot tests: pin what every bundled skin draws, byte for byte, so a refactor can prove it
 // changes nothing on screen, and so the owner can review a deliberate change by eye.
 //
-// The skins come from the game registry (every bundled skin), plus a user skin fixture that mixes
-// two games' parts (test/fixtures/skins/mixed.toml). Each bundled skin is drawn at three terminal
-// widths while nothing happens, and on a short panel (56 columns, 5 rows: the Raspberry Pi's 58x16
-// display), and every skin at the widest for each of four reactions: ouch, kill,
-// god, and dead (out of usage, with the 5h limit used up as the statusline would have it), and once
-// more calm with no subagents and no tasks, so the boxes of empty lists are pinned too.
+// The skins come from the game registry (every bundled skin entry), plus a user skin fixture that
+// mixes two games' parts (test/fixtures/skins-v2/mixed.toml). Each bundled skin is drawn at three
+// terminal widths while nothing happens, and on a short panel (56 columns, 5 rows: the Raspberry
+// Pi's 58x16 display), and every skin at the widest for each of four reactions: ouch, kill, god,
+// and dead (out of usage, with the 5h limit used up as the statusline would have it), and once more
+// calm with no subagents and no tasks, so the boxes of empty lists are pinned too.
 //
-// Each skin is drawn as the render daemon draws it: loaded, fitted down its smaller-skin chain, its
-// scripts run, drawn. renderSession itself is not called: it reads live CPU, RAM, git and the time,
-// which change on every run. Here the metric values are a fixed fixture, the clock is fixed, and the
-// DOOM mugshot is drawn at the richest glyph step, so the output does not depend on the terminal.
+// Each skin is drawn as the render daemon draws it: its entry loaded, resolved, fitted, its scripts
+// run, drawn (test/_v2-draw.mjs). renderSession itself is not called: it reads live CPU, RAM, git and
+// the time, which change on every run. Here the metric values are a fixed fixture, the clock is
+// fixed, and the DOOM mugshot is drawn at the richest glyph step, so the output does not depend on
+// the terminal.
 //
-// Some cases draw exactly what another case draws: a DOOM skin too wide for the terminal falls down
-// its smaller-skin chain to the skin that fits, and a skin that has no look for a reaction draws it
-// calm. Such a case has no file of its own. test/snapshots/index.json maps every case to the file
-// it must match, and no two files hold the same drawing, so each file pins something of its own.
+// Some cases draw exactly what another case draws: a DOOM entry too wide for the terminal draws the
+// alternative that fits, and a skin that has no look for a reaction draws it calm. Such a case has
+// no file of its own. test/snapshots/index.json maps every case to the file it must match, and no
+// two files hold the same drawing, so each file pins something of its own.
 //
 // Re-record on purpose, never in CI: UPDATE_SNAPSHOTS=1 writes the files and the index, and removes
 // files the index no longer names. A missing or stale index or file fails otherwise.
@@ -29,18 +30,14 @@ import { fileURLToPath } from "node:url";
 import { buildReaction } from "../../src/metrics/reaction.js";
 import { bundledSkins } from "../../src/games/index.js";
 import { findSkin } from "../../src/skin-select.js";
-import { loadSkin } from "../../src/kit/skin/load.js";
-import { fitSkin } from "../../src/kit/skin/fit.js";
-import { drawFit } from "../../src/kit/skin/draw.js";
-import { runScripts, createScriptPass } from "../../src/kit/skin/scripts.js";
 import { createScriptHost } from "../../src/platform/scripts/host.js";
-import { createAssetResolver } from "../../src/platform/assets.js";
 import { RAW_SAMPLE } from "../_raw-sample.mjs";
+import { drawEntry } from "../_v2-draw.mjs";
 
 const TEST_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SNAP_DIR = path.join(TEST_DIR, "snapshots");
 const INDEX = path.join(SNAP_DIR, "index.json");
-const MIXED = path.join(TEST_DIR, "fixtures", "skins", "mixed.toml");
+const MIXED = path.join(TEST_DIR, "fixtures", "skins-v2", "mixed.toml");
 const UPDATE = process.env.UPDATE_SNAPSHOTS === "1";
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
@@ -51,12 +48,12 @@ if (UPDATE && process.env.CI) {
 }
 
 const NOW = 1793500000;              // fixed clock: chat position, idle slot, idle glance
-// The terminal widths a bundled skin is drawn at: narrow (parts dropped, or the narrowest skin cut
-// at the edge), middle (parts shrunk) and wide (the whole skin). The reactions are drawn wide.
+// The terminal widths a bundled skin is drawn at: narrow (parts dropped, or a lower alternative),
+// middle (parts shrunk) and wide (the whole skin). The reactions are drawn wide.
 const WIDTHS = [60, 100, 200];
 const REACTION_WIDTH = 200;
 // A short terminal as well: the Raspberry Pi's built-in panel, 58x16, whose bar gets 56 columns and
-// a third of the rows. Every bundled skin is drawn calm at it, down its chain to a low skin.
+// a third of the rows. Every bundled skin is drawn calm at it.
 const PANEL = { width: 56, rows: 5 };
 
 // The session at each moment drawn: its metric values and its reaction.
@@ -69,16 +66,15 @@ const MOMENTS = {
   kill: { values: RAW_SAMPLE, reaction: reactionTo({ st: { expr: "kill", ts: NOW - 0.5 } }) },
   god: { values: RAW_SAMPLE, reaction: reactionTo({ godUntil: NOW + 1 }) },
   dead: { values: EXHAUSTED, reaction: reactionTo({ exhausted: true }, EXHAUSTED) },
-  // No subagents running and no tasks: the boxes of those lists show only their titles.
+  // No subagents running and no tasks: the boxes of those lists keep only their titles.
   "no-lists": { values: NO_LISTS, reaction: reactionTo({}, NO_LISTS) },
 };
 
-// Every skin drawn: the bundled ones in registry order, then the mixed user skin. `folder` is where
-// the skin's own paths are read from (a bundled skin's game folder, a user skin's own folder). The
-// mixed skin is narrower than any of the widths, so it is drawn calm at one width only.
+// Every skin drawn: the bundled entries in registry order, then the mixed user skin, which is drawn
+// calm at one width only.
 const SKINS = [
-  ...bundledSkins().map((s) => ({ name: s.name, file: s.file, folder: s.game.dir, widths: WIDTHS, panel: true })),
-  { name: "mixed", file: MIXED, folder: path.dirname(MIXED), widths: [REACTION_WIDTH] },
+  ...bundledSkins().map((s) => ({ name: s.name, sel: findSkin(s.name), widths: WIDTHS, panel: true })),
+  { name: "mixed", sel: { name: "mixed", file: MIXED, entry: null, game: null, user: true }, widths: [REACTION_WIDTH] },
 ];
 
 // Every case: each skin calm at each of its widths, a bundled skin calm on the panel, then each
@@ -91,37 +87,30 @@ const CASES = SKINS.flatMap((skin) => [
 ]);
 
 // The scripts get budgets a slow worker start cannot use up: one that runs late or is skipped would
-// leave its element on its default look, which is not what the snapshot pins.
+// leave its node on its default look, which is not what the snapshot pins.
 const host = createScriptHost({ callBudgetMs: 2000, graceMs: 2000, startupMs: 10000 });
-const loadNamed = (name) => loadSkin(findSkin(name).file).skin;
 
-// The elements whose scripts did not run: each scripted element needs its script's output, each
-// chat one result per conversation library it names. A skipped script gives no warning.
+// The nodes whose scripts did not run: each scripted node needs its script's output, each chat one
+// result per conversation library it names. A skipped script gives no warning.
 function scriptsNotRun(tree, scripts) {
   const missing = [];
-  const walk = (t) => {
-    const { node } = t;
-    if (typeof node.script === "string" && node.script !== "" && !Object.hasOwn(scripts, t.id)) missing.push(`${t.id} (${node.script})`);
-    const libraries = !node.container && typeof node.descriptor.libraries === "function" ? node.descriptor.libraries(node.params) : [];
-    if (libraries.length && (scripts[t.id]?.conversations ?? []).length !== libraries.length) missing.push(`${t.id} (conversation libraries)`);
-    t.children.forEach(walk);
+  const walk = (pl) => {
+    const { r } = pl;
+    if (typeof r.p.script === "string" && r.p.script !== "" && !Object.hasOwn(scripts, r.path)) missing.push(`${r.path} (${r.p.script})`);
+    const libraries = typeof r.desc.libraries === "function" ? r.desc.libraries(r.p) : [];
+    if (libraries.length && (scripts[r.path]?.conversations ?? []).length !== libraries.length) missing.push(`${r.path} (conversation libraries)`);
+    pl.kids.forEach(walk);
   };
   if (tree) walk(tree);
   return missing;
 }
 
-// One case drawn: its lines, the skin that drew them (the case's own, or one down its smaller-skin
-// chain), and what went wrong on the way (warnings, scripts that did not run).
+// One case drawn: its lines and what went wrong on the way (warnings, scripts that did not run).
 function draw({ skin, width, rows = Infinity, moment }) {
   const { values, reaction } = MOMENTS[moment];
-  const assets = createAssetResolver({ folder: skin.folder });
-  const loaded = loadSkin(skin.file);
-  const fit = fitSkin(loaded.skin, { values, width, rows, loadSmaller: loadNamed });
-  const pass = createScriptPass({ budgetMs: 60000, callBudgetMs: 10000 });
-  const run = runScripts(fit, { host, pass, values, reaction, now: NOW, tick: 0, folderOf: () => skin.folder, resolveAsset: assets.resolve });
-  const lines = drawFit(run.fit, { values, width, scripts: run.scripts, ctx: { tick: 0, step: "octant", resolveAsset: assets.resolve, reaction, now: NOW } });
-  const warnings = [...loaded.warnings, ...fit.warnings, ...run.warnings, ...assets.warnings()].map((w) => w.message);
-  return { text: lines.join("\n") + "\n", drawnBy: fit.skin.name, warnings, notRun: scriptsNotRun(run.fit.tree, run.scripts) };
+  const d = drawEntry(skin.sel, { width, rows, values, reaction, now: NOW, scripts: host });
+  const warnings = [...d.loaded.warnings, ...d.warnings].map((w) => w.message);
+  return { text: d.lines.join("\n") + "\n", warnings, notRun: scriptsNotRun(d.fit.tree, d.scripts) };
 }
 
 const readIndex = () => { try { return JSON.parse(readFileSync(INDEX, "utf8")); } catch { return null; } };
@@ -140,13 +129,13 @@ try {
   if (UPDATE) {
     // A drawing with a warning or a script that did not run is not recorded for the owner.
     if (fails) throw new Error("not recorded: fix the failures above first");
-    // One file per distinct drawing, named after the first case whose own skin drew it.
+    // One file per distinct drawing, named after the first case that drew it.
     const groups = new Map();
     for (const c of drawn) groups.set(c.text, [...(groups.get(c.text) ?? []), c]);
     const index = {};
     mkdirSync(SNAP_DIR, { recursive: true });
     for (const [text, cases] of groups) {
-      const file = (cases.find((c) => c.drawnBy === c.skin.name) ?? cases[0]).name;
+      const file = cases[0].name;
       writeFileSync(path.join(SNAP_DIR, `${file}.txt`), text);
       for (const c of cases) index[c.name] = file;
     }

@@ -5,8 +5,8 @@
 // 1. Measure, bottom-up. Every node reports { min, nat, max, rows, minRows } (and `step` for a leaf
 //    that changes size in steps): a leaf from its kind, a container from its children and its
 //    decoration. A node with nothing to show is applied first by its `empty` setting: "collapse"
-//    measures nothing, "blank" keeps its minimum size (and so does everything under a blank
-//    container).
+//    measures nothing, "blank" keeps a leaf at its minimum size and a container's decoration (a
+//    box's frame and title) around children that collapse as they would.
 // 2. Degrade where something does not fit. Every node has a room in each dimension it has to
 //    itself: a side of a mirrored anchor its half of the width, a child of a horizontal list the
 //    list's rows, a child of a vertical list its width. A node whose minimum exceeds its room
@@ -49,12 +49,13 @@ const allKids = (r) => [...r.kids, ...Object.values(r.places), ...r.cases.map((c
 // The children that take part in this render's layout: a switch's active case only.
 const activeKids = (r) => (r.kind === "switch" ? [activeCase(r)].filter(Boolean) : [...r.kids, ...Object.values(r.places)]);
 
-// The fit's modes: a node with nothing to show collapses, unless it or a container above it keeps
-// its place (blank).
-function setModes(r, blankAbove) {
-  const keeps = r.empty && (blankAbove || r.p.empty === "blank" || r.p.empty === "zero" || r.p.empty === "full");
+// The fit's modes: a node with nothing to show collapses, unless it keeps its place (blank): a leaf
+// at its minimum size, a container with its decoration (a box its frame and title) around children
+// that collapse as they would.
+function setModes(r) {
+  const keeps = r.empty && (r.p.empty === "blank" || r.p.empty === "zero" || r.p.empty === "full");
   r.mode = !r.empty ? "normal" : keeps ? "blank" : "gone";
-  for (const k of allKids(r)) setModes(k, blankAbove || r.mode === "blank");
+  for (const k of allKids(r)) setModes(k);
 }
 
 // --- The fit --------------------------------------------------------------------------------------
@@ -63,7 +64,7 @@ export function fitTree(root, { width, rows, env = {} } = {}) {
   const W = Math.max(0, width);
   const R = Math.max(0, rows);
   const rootRoom = { w: W, h: R };
-  setModes(root, false);
+  setModes(root);
 
   // Sizes, cached per node until the node or something under it changes.
   const invalidate = (r) => { for (let x = r; x; x = x.parent) { x._m = undefined; x._ex = undefined; } };
