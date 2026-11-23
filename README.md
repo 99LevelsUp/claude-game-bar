@@ -178,7 +178,7 @@ The skin names of releases before 3.0.0 still work wherever they are saved, and 
 
 ### Your own skin
 
-Your own skins live in `~/.claude/claude-game-bar/skins/<name>/`, each in its own folder as `<name>.toml`, with any images or scripts of its own beside it. An update replaces the bundled skins and never touches yours. A name a bundled skin already has is taken by the bundled one.
+Your own skins live in `~/.claude/claude-game-bar/skins/<name>/`, each in its own folder as `<name>.toml`, with any images or scripts of its own beside it. An update replaces the bundled skins and never touches yours. A name a bundled skin already has is taken by the bundled one: `skin list` names such a folder as not drawn, and a session that draws that name says so in a warning. Rename the folder to use it.
 
 The easiest start is a copy of a game's skin file (`src/games/<game>/<game>.toml` in the package). It draws its entry named like its folder, else its first:
 

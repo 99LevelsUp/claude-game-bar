@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   brightness, dimmed by one factor (0.75), instead of squeezing every colour into the band 48 to
   168: the face's black background stays black, white becomes 191, and the bar still reads as
   switched off.
+- **A skin of your own named like a bundled skin is no longer skipped silently** (#101). Such a
+  folder (`skins/doom/`, `skins/default/`, `skins/minecraft/`) is still never drawn, but
+  `claude-game-bar skin list` names it as not drawn, and a session that draws the bundled skin of
+  that name shows a warning asking to rename the folder.
 
 ## [3.0.0] - 2026-11-23
 

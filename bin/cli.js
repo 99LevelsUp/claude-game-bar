@@ -33,7 +33,7 @@ import { rootHash, runtimeDir, samePath } from "../src/platform/runtime.js";
 import { envGet, newName, oldName, bothNames } from "../src/platform/env.js";
 import { HOOK_EVENTS, die, settingsFile, load, save, install, uninstall } from "../src/install/settings.js";
 import {
-  selectSkin, findSkin, listSkins, nextSkin, savedSkin, saveSkin, clearSkin, savedSkinFile, userDir,
+  selectSkin, findSkin, listSkins, hiddenUserSkins, nextSkin, savedSkin, saveSkin, clearSkin, savedSkinFile, userDir,
 } from "../src/skin-select.js";
 import { stopDaemon } from "../src/install/daemons.js";
 import { removeOldPackage, OLD_PACKAGE } from "../src/install/old-package.js";
@@ -191,6 +191,11 @@ async function skin(name) {
     if (own.length) {
       console.log(`your skins (${path.join(userDir(), "skins")}):`);
       for (const s of own) console.log(`  ${s.name === current ? "▶" : " "} ${s.name.padEnd(15)} `);
+    }
+    const hidden = hiddenUserSkins();
+    if (hidden.length) {
+      console.log(`not drawn, a bundled skin has the name (rename the folder in ${path.join(userDir(), "skins")}):`);
+      for (const s of hidden) console.log(`    ${s.name}`);
     }
     console.log("\nswitch with:  claude-game-bar skin <name>   (or: skin next)");
     return;
