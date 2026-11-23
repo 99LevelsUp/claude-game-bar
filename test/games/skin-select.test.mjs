@@ -33,7 +33,7 @@ for (const k of Object.keys(process.env)) {
 }
 
 const { GAMES, readGame, defaultGame, bundledSkins } = await import("../../src/games/index.js");
-const { selectSkin, findSkin, listSkins, nextSkin, saveSkin, savedSkin, userDir } = await import("../../src/skin-select.js");
+const { selectSkin, findSkin, listSkins, hiddenUserSkins, nextSkin, saveSkin, savedSkin, userDir } = await import("../../src/skin-select.js");
 
 const FIXTURE = readGame(path.join(HERE, "fixture-game"));
 const SIZED = readGame(path.join(HERE, "fixture-sized"));
@@ -143,6 +143,13 @@ try {
     ok(s.name === "zz-mine" && s.file === path.join(USER, "skins", "zz-mine", "zz-mine.toml") && s.game === null,
       "a user skin is found in the user directory");
     ok(select({ GAMEBAR_SKIN: "fixture" }).file === FIXTURE.skins[0].file, "a user skin cannot take a bundled skin's name");
+    const hiddenWarn = (s) => s.warnings.filter((w) => w.cause === "hidden-skin");
+    s = select({ GAMEBAR_SKIN: "fixture" });
+    ok(hiddenWarn(s).length === 1 && hiddenWarn(s)[0].message.includes("skins/fixture/"),
+      `drawing that name warns that the user's folder of the name is not drawn (${JSON.stringify(s.warnings)})`);
+    ok(hiddenWarn(select({ GAMEBAR_SKIN: "zz-mine" })).length === 0, "a user skin of its own name draws with no such warning");
+    ok(hiddenWarn(select({ GAMEBAR_SKIN: "sized-full" })).length === 0, "nor does a bundled skin no user folder shares");
+    ok(hiddenUserSkins(base).map((x) => x.name).join(",") === "fixture", "the hidden user skins are listed apart");
     ok(findSkin("sized", base)?.name === "sized-full", "a game's name finds its default skin");
 
     // The order `skin next` cycles: the bundled skins in registry order, then the user's.
@@ -252,6 +259,11 @@ try {
     const at = all.map((n) => list.indexOf(` ${n} `));
     ok(at.every((i, k) => i >= 0 && (k === 0 || i > at[k - 1])), `skin list shows every skin in that order:\n${list}`);
     ok(cli(home, "skin") === list, "skin with no name lists them too");
+    userSkin("doom");
+    const hidden = cli(home, "skin", "list");
+    ok(/not drawn, a bundled skin has the name[^\n]*\n\s+doom\s*$/m.test(hidden) && hidden.indexOf(" doom ") < hidden.indexOf("not drawn"),
+      `a user folder named like a bundled skin is listed as not drawn:\n${hidden}`);
+    rmSync(path.join(USER, "skins", "doom"), { recursive: true, force: true });
     ok(refused(home, "skin", "nope") && savedSkin(base) === all[0], "an unknown skin is refused and nothing is saved");
     ok(refused(home, "install", "--skin", "nope"), "install --skin with an unknown skin is refused");
 

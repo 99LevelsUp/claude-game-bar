@@ -13,7 +13,8 @@
 // The user directory is ~/.claude/claude-game-bar/ (GAMEBAR_USER_DIR overrides it):
 //   skin.json            the saved choice, { "skin": "<name>" }
 //   skins/<name>/        a skin of the user's own: <name>.toml and its own assets
-// A user skin never takes the name of a bundled skin; the bundled one is found first.
+// A user skin never takes the name of a bundled skin; the bundled one is found first, `skin list`
+// names the folder it hides, and a session drawing that name gets a warning.
 //
 // A skin: { name, file, game, size, user }. `file` is null for a skin a bundled game names whose file
 // it does not ship yet; `game` is the registry entry, null for a user skin; `size` the preset name
@@ -57,14 +58,19 @@ export function clearSkin(env = process.env) {
 const sizeOf = (game, name) => Object.keys(game.presetSkins).find((k) => game.presetSkins[k] === name) ?? null;
 const bundled = (s) => ({ name: s.name, file: s.file, entry: s.entry ?? null, game: s.game, size: sizeOf(s.game, s.name), user: false });
 
-export function userSkins(env = process.env) {
+// The user's skins, and those a bundled skin's name hides (never drawn, the bundled one is found first).
+function ownSkins(env) {
   let names;
   try {
     names = readdirSync(userSkinsDir(env), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  } catch { return []; }
+  } catch { return { drawn: [], hidden: [] }; }
   const taken = new Set(bundledSkins().map((s) => s.name));
-  return names.filter((n) => validName(n) && !taken.has(n)).map((n) => userSkin(n, env)).filter(Boolean);
+  const skins = names.filter(validName).map((n) => userSkin(n, env)).filter(Boolean);
+  return { drawn: skins.filter((s) => !taken.has(s.name)), hidden: skins.filter((s) => taken.has(s.name)) };
 }
+
+export const userSkins = (env = process.env) => ownSkins(env).drawn;
+export const hiddenUserSkins = (env = process.env) => ownSkins(env).hidden;
 
 function userSkin(name, env) {
   const file = path.join(userSkinsDir(env), name, `${name}.toml`);
@@ -106,7 +112,13 @@ const presetSize = (preset) => preset.split(/[\\/]/).pop().replace(/\.toml$/, ""
 export function selectSkin(env = process.env) {
   const warnings = [];
   const preset = envGet("PRESET", env) || "";
-  const pick = (skin, source) => ({ ...skin, source, warnings });
+  const pick = (skin, source) => {
+    if (!skin.user && userSkin(skin.name, env)) {
+      warnings.push(warning("hidden-skin", skin.name,
+        `your skin ${skin.name} is not drawn: a bundled skin has its name (rename skins/${skin.name}/)`));
+    }
+    return { ...skin, source, warnings };
+  };
   // `skin` at the size the preset setting names, when its game reads presets.
   const sized = (skin) => {
     const game = skin.game;
