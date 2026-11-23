@@ -30,8 +30,6 @@ export const CONTAINERS = byName([anchorKind, listKind, boxKind, gridKind, layer
 export const LEAVES = byName([labelKind, textKind, numberKind, barKind, meterKind, stateKind, sparklineKind, columnsKind, scrollKind, chatKind, spriteKind]);
 export const KINDS = Object.freeze({ ...CONTAINERS, ...LEAVES });
 
-export { PLATFORM_ICONS } from "./visuals/common.js";
-
 // The descriptor of a node kind, or null.
 export const kindOf = (name) => (typeof name === "string" && Object.hasOwn(KINDS, name) ? KINDS[name] : null);
 

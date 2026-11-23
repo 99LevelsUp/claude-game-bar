@@ -18,7 +18,7 @@ export const textKind = define({
   accepts: ["label", "name", "enum", "duration", "time", "ratio", "money", "count", "percent"],
   params: {
     icon: iconParam(),
-    overflow: param("text", "scroll", "How a value longer than its columns fits: scroll back and forth, cut it, or cut it with an ellipsis", { allowed: ["scroll", "clip", "ellipsis"] }),
+    overflow: param("text", "scroll", "How a value longer than its columns fits: scroll back and forth, or cut it with an ellipsis (clip; ellipsis is the same)", { allowed: ["scroll", "clip", "ellipsis"] }),
     link: param("boolean", true, "Draw a value that links somewhere as a terminal hyperlink"),
     words: param("integer", 0, "Draw only the value's first this many words (a model's name without its version); 0 draws it all", { min: 0 }),
   },

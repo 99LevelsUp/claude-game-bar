@@ -47,7 +47,6 @@ const CHECKS = {
   asset: (v) => typeof v === "string",
 };
 
-export const PARAM_TYPES = [...Object.keys(CHECKS), "node", "nodes", "cases"];
 export const STRUCTURAL = new Set(["node", "nodes", "cases"]);
 
 export const param = (type, def, meaning, extra = {}) => Object.freeze({ type, default: def, meaning, ...extra });

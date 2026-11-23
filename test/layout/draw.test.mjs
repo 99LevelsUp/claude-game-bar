@@ -52,6 +52,16 @@ children = [{ kind = "label", text = "in" }]
 
   const blue = drawEntry(skin, { width: 60, scripts: { [box.r.path]: { params: { background: "#0000ff" } } } });
   ok(joined(blue).includes(BLUE) && !joined(plain).includes(BLUE), "a script's params.background on a container is drawn as its surface");
+
+  // A text longer than its columns, cut: clip ends the cut with an ellipsis, and ellipsis is the same.
+  const cutFile = path.join(SB, "cut.toml");
+  const cutSkin = (overflow) => {
+    writeFileSync(cutFile, `version = 2\n[skin.cut]\nroot = "t"\n[element.t]\nkind = "text"\nmetric = "git.branch"\nwidth = 6\noverflow = "${overflow}"\n`);
+    return drawEntry({ name: "cut", file: cutFile, entry: null, game: null, user: true },
+      { width: 6, values: { "git.branch": "claude-game-bar" } }).text[0];
+  };
+  const ell = cutSkin("ellipsis"), clip = cutSkin("clip");
+  ok(clip === "claud…" && ell === clip, `overflow = "clip" ends the cut with … ("${clip}"), and "ellipsis" draws the same ("${ell}")`);
 } finally {
   rmSync(SB, { recursive: true, force: true });
 }
