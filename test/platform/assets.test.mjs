@@ -105,7 +105,17 @@ try {
       "a game with its folder in the checkout resolves there");
     ok(r.resolve("fixgame:../../outside.png") === null && r.resolve("fixgame:images/none.png") === null,
       "a path out of the game's folder, or one that is not there, resolves to nothing");
-    ok(started === 0 && r.warnings().length === 0, "nothing is installed for it");
+    ok(started === 0, "nothing is installed for it");
+    const w = r.warnings();
+    ok(w.length === 1 && w[0].cause === "asset-not-found" && w[0].subject === "fixgame:images/none.png" && w[0].message.includes("fixgame:images/none.png"),
+      `a path its folder does not have is reported, once, by its reference; one out of the folder is not (${JSON.stringify(w)})`);
+    r.resolve("fixgame:images/none.png");
+    r.report("asset-unreadable", "fixgame:images/face.png");
+    r.report("asset-unreadable", "fixgame:images/face.png");
+    ok(r.warnings().length === 2 && r.warnings()[1].cause === "asset-unreadable" && r.warnings()[1].message.includes("cannot be read"),
+      `a file reported as unreadable is warned about once (${JSON.stringify(r.warnings())})`);
+    ok(assets.createAssetResolver({ env, now: Date.now(), folder: null, lookup: () => null, install: () => {} }).resolve("images/x.png") === null,
+      "an own reference of a skin with no folder resolves to nothing");
   }
 
   console.log("an install: constant npm arguments in a fresh folder inside the store:");
@@ -260,6 +270,23 @@ try {
     const scripted = renderSession({ data, env: { ...renderEnv, GAMEBAR_SKIN: "fixscript" } }).map(strip);
     ok(scripted.slice(0, 4).some((l) => /\S/.test(l)) && !scripted.some((l) => l.startsWith("gamebar: ")),
       `a game: script reference and a game: frames folder resolve through the store (${JSON.stringify(scripted)})`);
+    // A file the skin names that is not there, a file that is no picture, a frame the script names
+    // that the folder lacks: each draws the default and says so.
+    const own = (name, lines, files = {}) => {
+      const d = path.join(env.GAMEBAR_USER_DIR, "skins", name);
+      mkdirSync(path.join(d, "images"), { recursive: true });
+      for (const [f, body] of Object.entries(files)) writeFileSync(path.join(d, f), body);
+      writeFileSync(path.join(d, `${name}.toml`), [`version = 2`, `[skin.${name}]`, `root = "bar"`, "", "[element.bar]", `kind = "list"`, `children = ["face"]`, "",
+        "[element.face]", `kind = "sprite"`, ...lines, "rows = 4", ""].join("\n"));
+      return renderSession({ data, env: { ...renderEnv, GAMEBAR_SKIN: name } }).map(strip).filter((l) => l.startsWith("gamebar: "));
+    };
+    let said = own("fixtypo", [`default_frame = "images/fase.png"`]);
+    ok(said.length === 1 && said[0].includes("images/fase.png is not there"), `a default frame the skin's folder lacks is reported (${JSON.stringify(said)})`);
+    said = own("fixjunk", [`default_frame = "images/junk.png"`], { "images/junk.png": "not a png" });
+    ok(said.length === 1 && said[0].includes("images/junk.png cannot be read"), `a default frame that is no picture is reported (${JSON.stringify(said)})`);
+    said = own("fixframe", [`frames = "fixlive:images"`, `script = "pick.js"`, `default_frame = "fixlive:images/face.png"`],
+      { "pick.js": "function render(input) { return { frame: \"fase\" }; }\n" });
+    ok(said.length === 1 && said[0].includes("fixlive:images/fase.png is not there"), `a frame the script names that the folder lacks is reported (${JSON.stringify(said)})`);
     const usage = readdirSync(env.GAMEBAR_USER_DIR).filter((f) => /^usage-[0-9a-f]+\.json$/.test(f));
     const entry = usage.length === 1 ? JSON.parse(readFileSync(path.join(env.GAMEBAR_USER_DIR, usage[0]), "utf8")).skins?.fixskin : null;
     ok(entry && JSON.stringify(entry.packages) === JSON.stringify(["fixlive@1.0.0"]),

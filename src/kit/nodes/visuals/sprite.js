@@ -8,6 +8,7 @@
 // rows, and fixed: it neither shrinks nor grows. At more rows than its width allows, the frame is
 // drawn at the most rows that fit and centred in the rest.
 
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { define } from "../define.js";
 import { param } from "../schema.js";
@@ -74,10 +75,17 @@ export const spriteKind = define({
   draw({ params: p, width, height, ctx = {}, script = {}, surface }) {
     const name = script.frame ? String(script.frame) : "";
     const dir = plainName(name) ? fileOf(p.frames, ctx) : null;
-    const file = dir ? path.join(dir, path.extname(name) ? name : `${name}.png`) : null;
+    const frame = dir ? (path.extname(name) ? name : `${name}.png`) : null;
     const canvas = canvasOf(p, ctx);
-    return drawImage(file, p, width, height, ctx, surface, canvas)
-      ?? drawImage(fileOf(p.default_frame, ctx), p, width, height, ctx, surface, canvas)
+    // A file that should have drawn and did not is reported by the reference it came from: a frame
+    // the script named that the folder lacks, or a file that is no picture.
+    const image = (file, ref) => {
+      const lines = drawImage(file, p, width, height, ctx, surface, canvas);
+      if (!lines && file && typeof ctx.reportAsset === "function") ctx.reportAsset(existsSync(file) ? "asset-unreadable" : "asset-not-found", ref);
+      return lines;
+    };
+    return image(frame && path.join(dir, frame), `${p.frames}/${frame}`)
+      ?? image(fileOf(p.default_frame, ctx), p.default_frame)
       ?? block([], width, height);
   },
 });

@@ -116,7 +116,7 @@ function drawNode(placed, parentSurface, env) {
 const trimEnd = (l) => l.replace(/ +$/, "");
 
 // The bar's lines for `fit` in a terminal `width` columns wide. `values` are the session's metric
-// values, `ctx` the render context the visuals read (tick, step, now, resolveAsset), `scripts` each
+// values, `ctx` the render context the visuals read (tick, step, now, resolveAsset, reportAsset), `scripts` each
 // node's script output by placement path, `lines` the game's own line sets.
 export function drawFit(fit, { width, values = {}, ctx = {}, scripts = {}, lines = {} } = {}) {
   if (!fit.tree) return [];

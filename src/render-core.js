@@ -152,7 +152,7 @@ function renderSkin({ selected, data, env, now, warningStore, scripts, runScript
   // missing package starts installing before a narrower terminal needs it.
   const assets = createAssetResolver({ env, now: now * 1000, folder });
   for (const g of entryGames(entry)) assets.need(g);
-  const ctx = { tick, step, resolveAsset: assets.resolve, reaction, now };
+  const ctx = { tick, step, resolveAsset: assets.resolve, reportAsset: assets.report, reaction, now };
   let outputs = {};
   if (scripts !== false) {
     const run = runScripts(fit, {
