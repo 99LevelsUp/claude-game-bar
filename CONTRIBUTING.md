@@ -167,8 +167,9 @@ first, from the cut end), inner switches take their next case, and only then doe
 switch move on. If even the last case does not fit, it is drawn cut at the edge.
 
 Kinds and parameters the design specifies but this release does not build (`each`, `marks`,
-`image`, `rule`, a computed `value`, `trend`, `joined`, a skin's `before` script, a sprite's `draw`)
-are reported as not available in this version.
+`image`, `rule`, a computed `value`, `type`, `trend`, `trend_window`, `currency`, `joined`, a
+skin's `before` script, a sprite's `draw`, the `block` line set) are reported as not available in
+this version.
 
 A part of a skin that does not hold (an unknown key, kind, metric or parameter, a missing child, an
 expression that does not parse) is skipped with one warning, shown as a dim line under the bar for

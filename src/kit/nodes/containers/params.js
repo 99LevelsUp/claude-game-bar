@@ -27,7 +27,7 @@ export const BOX_PARAMS = {
   title_align: param("text", "center", "Where the title sits", { allowed: ["start", "center", "end"] }),
   title_color: param("color", null, "The title's colour; the box's colour when not set", { keywords: [] }),
   fill: param("color", "none", "A background behind the whole box", { keywords: ["none"] }),
-  border: param("text", "none", "A frame around the box: none, or a line set (light, heavy, double, rounded, ascii, block, or one of the game's)"),
+  border: param("text", "none", "A frame around the box: none, or a line set (light, heavy, double, rounded, ascii, or one of the game's)"),
   border_color: param("color", null, "The frame's colour"),
   padding: param("integer", 0, "Room inside the frame on the left and the right", { min: 0, max: MAX_COLUMNS, measured: true }),
 };

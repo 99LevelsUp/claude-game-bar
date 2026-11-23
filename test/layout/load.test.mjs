@@ -60,6 +60,11 @@ const params = build(`[skin.s]\nroot = "a"\n[element.a]\nkind = "list"\nfrobs = 
 const pc = causes(params);
 ok(pc.includes("unknown-param") && pc.includes("invalid-param"), "unknown and invalid parameters are reported");
 ok(params.warnings.some((w) => w.cause === "unavailable" && w.subject === "joined"), "a reserved parameter is not available in this version");
+const block = build(`[skin.s]\nroot = "r"\n[element.r]\nkind = "list"\nchildren = ["a", "g"]\n[element.a]\nkind = "box"\nborder = "block"\n[element.g]\nkind = "grid"\nlines = "block"`);
+ok(block.warnings.filter((w) => w.cause === "unavailable" && (w.subject === "border" || w.subject === "lines")).length === 2,
+  `the reserved line set block is not available in this version, as a border or a grid's lines (${block.warnings.map((w) => w.cause + ":" + w.subject).join(", ")})`);
+const light = build(`[skin.s]\nroot = "a"\n[element.a]\nkind = "box"\nborder = "light"`);
+ok(!light.warnings.some((w) => w.cause === "unavailable"), "a line set it draws is not reported");
 ok(params.warnings.some((w) => w.cause === "bad-expression" && w.element === "a" && w.subject === "align"), "an expression that does not parse names the element and the parameter");
 ok(params.warnings.some((w) => w.cause === "jumping-param" && w.subject === "width"), "a size read from a metric is reported");
 ok(params.warnings.some((w) => w.cause === "room-outside-switch" && w.subject === "min_width"), "$width outside a switch condition is reported");

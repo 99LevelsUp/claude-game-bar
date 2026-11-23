@@ -36,6 +36,10 @@ import { parse as parseToml } from "smol-toml";
 import { CATALOGUE } from "../../metrics/catalogue.js";
 import { kindOf, isReservedKind } from "../nodes/index.js";
 import { SHARED, NODE_KEYS, RESERVED_PARAMS, STRUCTURAL, checkValue, describeAllowed } from "../nodes/schema.js";
+import { RESERVED_SETS } from "../nodes/lines.js";
+
+// The parameters that name a line set.
+const LINE_PARAMS = new Set(["border", "lines", "selected_lines"]);
 import { makeWarning } from "../warning.js";
 import { isPlainObject } from "../is.js";
 import { compile, isComputed } from "./expr.js";
@@ -162,6 +166,9 @@ function buildFile(data, file, add) {
       if (STRUCTURAL.has(s.type)) { structural[k] = v; continue; }
       const pv = paramValue(id, k, s, v, add);
       if (pv) params[k] = pv;
+      if (LINE_PARAMS.has(k) && RESERVED_SETS.includes(v)) {
+        add("unavailable", id, k, `line set "${v}" is not available in this version`);
+      }
     }
     for (const [k, s] of Object.entries(schema)) {
       if (!STRUCTURAL.has(s.type) && !Object.hasOwn(params, k)) params[k] = { lit: s.default };
