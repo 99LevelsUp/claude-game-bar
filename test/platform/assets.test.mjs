@@ -61,13 +61,16 @@ function publish(name, version) {
   mkdirSync(path.join(dir, "scripts"), { recursive: true });
   writeFileSync(path.join(dir, "scripts", "pick.js"), "function render(input) { return { frame: \"face\" }; }\n");
 }
-// A user skin: one animation whose default frame is `frame`, and optionally a smaller skin.
-function userSkin(name, frame, smaller = null) {
+// A user skin: one sprite whose default frame is `frame`, and optionally a second alternative (a
+// switch case) drawing `other`, so the skin's tree uses two games' assets.
+function userSkin(name, frame, other = null) {
   const dir = path.join(env.GAMEBAR_USER_DIR, "skins", name);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, `${name}.toml`), [`version = 1`, `root = "bar"`, ...(smaller ? [`smaller = "${smaller}"`] : []), "",
-    "[element.bar]", `kind = "row"`, `children = ["face"]`, "",
-    "[element.face]", `kind = "animation"`, `default_frame = "${frame}"`, "width = 9", "rows = 4", ""].join("\n"));
+  writeFileSync(path.join(dir, `${name}.toml`), [`version = 2`, `[skin.${name}]`, `root = "bar"`, "",
+    "[element.bar]", `kind = "switch"`, `children = [${other ? '"face", "other"' : '"face"'}]`, "",
+    "[element.face]", `kind = "sprite"`, `default_frame = "${frame}"`, "rows = 4", "",
+    ...(other ? ["[element.other]", `kind = "sprite"`, `default_frame = "${other}"`, "rows = 2", ""] : []),
+  ].join("\n"));
 }
 
 const children = [];
@@ -252,8 +255,8 @@ try {
     // so a drawn face proves the script was found in the store, ran, and its frame was found there.
     const sdir = path.join(env.GAMEBAR_USER_DIR, "skins", "fixscript");
     mkdirSync(sdir, { recursive: true });
-    writeFileSync(path.join(sdir, "fixscript.toml"), [`version = 1`, `root = "bar"`, "", "[element.bar]", `kind = "row"`, `children = ["face"]`, "",
-      "[element.face]", `kind = "animation"`, `frames = "fixlive:images"`, `script = "fixlive:scripts/pick.js"`, "width = 9", "rows = 4", ""].join("\n"));
+    writeFileSync(path.join(sdir, "fixscript.toml"), [`version = 2`, `[skin.fixscript]`, `root = "bar"`, "", "[element.bar]", `kind = "list"`, `children = ["face"]`, "",
+      "[element.face]", `kind = "sprite"`, `frames = "fixlive:images"`, `script = "fixlive:scripts/pick.js"`, "rows = 4", ""].join("\n"));
     const scripted = renderSession({ data, env: { ...renderEnv, GAMEBAR_SKIN: "fixscript" } }).map(strip);
     ok(scripted.slice(0, 4).some((l) => /\S/.test(l)) && !scripted.some((l) => l.startsWith("gamebar: ")),
       `a game: script reference and a game: frames folder resolve through the store (${JSON.stringify(scripted)})`);
@@ -296,16 +299,15 @@ try {
     rmSync(path.join(env.GAMEBAR_USER_DIR, "usage-bbbbbbbbbb.json"), { force: true });
   }
 
-  console.log("a fresh store ends with the chosen chain's packages and nothing else:");
+  console.log("a fresh store ends with the packages of the chosen skin's whole tree and nothing else:");
   {
     rmSync(STORE, { recursive: true, force: true });
     for (const f of readdirSync(env.GAMEBAR_USER_DIR).filter((x) => x.startsWith("usage-"))) rmSync(path.join(env.GAMEBAR_USER_DIR, f));
     GAMES.push(gameFolder("fixsmall", "1.0.0", GOOD), gameFolder("fixgame", "7.0.0", GOOD, "fixgame-seven"));
-    userSkin("chainsmall", "fixsmall:images/face.png");
-    userSkin("chainbig", "fixgame:images/face.png", "chainsmall");
+    userSkin("chainbig", "fixgame:images/face.png", "fixsmall:images/face.png");
     mkdirSync(path.join(STORE, "fixother@1.0.0"), { recursive: true });
     const lines = await assets.installSkinAssets("chainbig", { env });
-    ok(lines.length === 2, `the chain's two packages are installed in the foreground (${JSON.stringify(lines)})`);
+    ok(lines.length === 2, `the two packages its switch cases use are installed in the foreground (${JSON.stringify(lines)})`);
     assets.removeUnused({ env, keep: assets.skinPackages("chainbig", env) });
     ok(JSON.stringify(storeNames()) === JSON.stringify(["fixgame@7.0.0", "fixsmall@1.0.0"]), `the store holds exactly those (${storeNames().join(", ")})`);
   }
