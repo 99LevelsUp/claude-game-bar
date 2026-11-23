@@ -37,9 +37,6 @@ import { CATALOGUE } from "../../metrics/catalogue.js";
 import { kindOf, isReservedKind } from "../nodes/index.js";
 import { SHARED, NODE_KEYS, RESERVED_PARAMS, STRUCTURAL, checkValue, describeAllowed } from "../nodes/schema.js";
 import { RESERVED_SETS } from "../nodes/lines.js";
-
-// The parameters that name a line set.
-const LINE_PARAMS = new Set(["border", "lines", "selected_lines"]);
 import { makeWarning } from "../warning.js";
 import { isPlainObject } from "../is.js";
 import { compile, isComputed } from "./expr.js";
@@ -47,6 +44,8 @@ import { checkVars } from "./vars.js";
 
 const TOP_KEYS = ["version", "game", "skin", "element"];
 const ENTRY_KEYS = ["root", "vars", "before"];
+// The parameters that name a line set.
+const LINE_PARAMS = new Set(["border", "lines", "selected_lines"]);
 const isTable = (v) => isPlainObject(v) && !(v instanceof Date);
 const firstLine = (s) => String(s).split(/\r?\n/).find((l) => l.trim()) || "";
 const deepFreeze = (o) => {
