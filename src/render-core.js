@@ -136,16 +136,14 @@ function renderSkin({ selected, data, env, now, warningStore, scripts, runScript
   const width = Math.max(0, columnsOf(env) - indentOf(env));
   const tick = Math.floor(now);
   const scope = createScope({ game: style.vars, skin: entry.vars, values, now, tick });
-  const root = resolveTree(entry.root, {
-    scope, values,
-    report: (w) => warnings.push(makeWarning({ key: [skin.file, w.path, w.cause, w.subject].join("|"), cause: w.cause, skin: skin.file,
-      element: w.element, subject: w.subject, message: `skin "${path.basename(skin.file)}", element "${w.element}": ${w.message}` })),
-  });
+  const report = (w) => warnings.push(makeWarning({ key: [skin.file, w.path, w.cause, w.subject].join("|"), cause: w.cause, skin: skin.file,
+    element: w.element, subject: w.subject, message: `skin "${path.basename(skin.file)}", element "${w.element}": ${w.message}` }));
+  const root = resolveTree(entry.root, { scope, values, report });
   // What the fit measures with: the skin's assets found from its folder, so a sprite is sized by its
   // frames. Lookups only: a missing package is installed and reported below.
   const measure = createAssetResolver({ env, now: now * 1000, folder, install: () => {} });
   const step = effectiveStep(env);
-  const fit = fitTree(root, { width, rows: rowsOf(env), env: { resolveAsset: measure.resolve, step } });
+  const fit = fitTree(root, { width, rows: rowsOf(env), env: { resolveAsset: measure.resolve, step }, report });
   // Assets come through the asset store: the skin's own references from its folder, a game's from
   // the checkout or the installed package. Every game the whole tree uses is looked up now, so a
   // missing package starts installing before a narrower terminal needs it.

@@ -33,6 +33,8 @@
 //   clipped  true when even the last alternative does not fit, so the bar is drawn cut
 //   fills    true when the root takes the whole width by itself (an anchor); otherwise the draw
 //            centres it (KTD12)
+// `report` receives what the fit finds wrong in the skin, in resolveTree's form ({ cause, element,
+// path, subject, message }): a switch condition that reads a name nothing defines.
 
 import { evaluate, truthy } from "./expr.js";
 import { decoLevels, measureBox } from "../nodes/containers/box.js";
@@ -60,7 +62,7 @@ function setModes(r) {
 
 // --- The fit --------------------------------------------------------------------------------------
 
-export function fitTree(root, { width, rows, env = {} } = {}) {
+export function fitTree(root, { width, rows, env = {}, report = () => {} } = {}) {
   const W = Math.max(0, width);
   const R = Math.max(0, rows);
   const rootRoom = { w: W, h: R };
@@ -138,10 +140,21 @@ export function fitTree(root, { width, rows, env = {} } = {}) {
     return !!f && (room.w === null || f.min <= room.w) && (room.h === null || f.minRows <= room.h);
   };
 
-  // A case's condition, evaluated with the room the switch was given.
+  // A case's condition, evaluated with the room the switch was given. A name it reads that nothing
+  // defines (a typo) makes it false, and is reported once, as a parameter's would be.
+  const reported = new Set();
   function holds(c, room) {
     if (!c.when) return true;
-    return truthy(evaluate(c.when, c.r.parent.scope.withRoom({ width: room.w, rows: room.h })).value);
+    const { value, unknown } = evaluate(c.when, c.r.parent.scope.withRoom({ width: room.w, rows: room.h }));
+    for (const name of unknown) {
+      const sw = c.r.parent;
+      const key = `${sw.path}|${name}`;
+      if (reported.has(key)) continue;
+      reported.add(key);
+      report({ cause: "unknown-name", element: sw.id, path: sw.path, subject: `when:${name}`,
+        message: `a case's condition reads "$${name}", which nothing defines; the case is passed over` });
+    }
+    return truthy(value);
   }
 
   // The case a switch starts with: the first whose condition holds and whose floor fits.

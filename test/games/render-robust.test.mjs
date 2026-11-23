@@ -75,6 +75,28 @@ text = "plain skin"
     ok(warningOf(fell).includes("plain") && warningOf(fell).includes("boom"), `the warning line names the skin and the error (${warningOf(fell)})`);
   }
 
+  // A switch condition that reads a name nothing defines is passed over, and said so.
+  userSkin("typo", `version = 2
+
+[skin.typo]
+root = "pick"
+
+[element.pick]
+kind = "switch"
+cases = [{ when = "= $wdth < 200", node = "narrow" }, { node = "wide" }]
+
+[element.narrow]
+kind = "label"
+text = "narrow"
+
+[element.wide]
+kind = "label"
+text = "wide"
+`);
+  const typo = render("typo");
+  ok(typo.some((l) => l.includes("wide")) && !typo.some((l) => l.includes("narrow")), `the case with the typo is passed over (${JSON.stringify(typo)})`);
+  ok(warningOf(typo).includes("$wdth") && warningOf(typo).includes("pick"), `the warning line names the unknown name and the switch (${warningOf(typo)})`);
+
   // A payload nothing can draw still throws: the caller keeps its last frame.
   const broken = { ...data, cost: "not an object" };
   let threw = false;
