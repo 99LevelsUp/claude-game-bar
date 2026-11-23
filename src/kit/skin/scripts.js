@@ -58,6 +58,11 @@ import { isPlainObject } from "../is.js";
 
 export { CALL_BUDGET_MS };
 export const PASS_BUDGET_MS = 200;
+// How long a script's last output stands in for a call the pass skipped (out of time, a batch cut
+// short, a host that threw), in seconds. A skipped call is no fault of the script, so its node
+// keeps looking as it did instead of falling back for one render to a default that may mean
+// something else (the DOOM mugshot's default face is the healthy one, #114).
+export const HOLD_LAST_S = 5;
 
 // The time scripts get in one render pass, shared by every session the pass renders. Each batch
 // gets the smaller of what is left and `callBudgetMs` per script. Only the time spent running
@@ -101,7 +106,8 @@ const valueOf = (r) => (r.standIn || r.mode === "blank" || r.value === undefined
 //   file          the skin file, which names the scripts' warnings and keys their state
 //   host          the script host; by default one shared by this process
 //   pass          the pass the time comes from (createScriptPass); by default one of this render's own
-//   state         this session's script state: a Map the caller keeps between renders
+//   state         this session's script state: a Map the caller keeps between renders; it also
+//                 holds each script's last output and when it came, for a call the pass skips
 //   values, reaction, now, tick   the session's render
 //   folder        the folder the skin's own script paths are read from; by default its file's
 //   resolveAsset  finds a game asset's file, or null
@@ -182,8 +188,14 @@ export function runScripts(fit, { file = null, host, pass = createScriptPass(), 
       } else if (res.status === "ok") {
         const out = isPlainObject(res.output) ? res.output : {};
         scripts[pl.r.path] = out;
-        if (Object.hasOwn(out, "state")) state.set(pl.r.path, { stamp, state: isPlainObject(out.state) ? out.state : {} });
-      } else if (res.status !== "skipped") {
+        const kept = state.get(pl.r.path);
+        const own = Object.hasOwn(out, "state") ? (isPlainObject(out.state) ? out.state : {}) : kept && kept.stamp === stamp ? kept.state : {};
+        state.set(pl.r.path, { stamp, state: own, last: out, lastAt: now });
+      } else if (res.status === "skipped") {
+        // Not run this pass: the script's last output, while it is recent and of this script.
+        const kept = library ? null : state.get(pl.r.path);
+        if (kept && kept.stamp === stamp && kept.last && now - kept.lastAt >= 0 && now - kept.lastAt <= HOLD_LAST_S) scripts[pl.r.path] = kept.last;
+      } else {
         const msg = String(res.message || "").replace(`${f}: `, "");
         const without = library ? "the chat plays without it" : "drawn without it";
         // A timeout turns the script off for a while only (the host's cooldown); anything else
