@@ -71,11 +71,22 @@ function drawParams(r, script) {
   return p;
 }
 
-function drawNode(pl, parentSurface, env) {
-  const { r } = pl;
+// The node as it is drawn this render: a script's valid `color` and `background` replace the ones
+// the node resolved before the scripts ran.
+function recoloured(r, script, params) {
+  const own = script && script.params && typeof script.params === "object" ? script.params : null;
+  if (!own) return r;
+  const color = Object.hasOwn(own, "color") && params.color != null ? params.color : r.color;
+  const background = Object.hasOwn(own, "background") && params.background != null ? params.background : r.background;
+  return color === r.color && background === r.background ? r : { ...r, color, background };
+}
+
+function drawNode(placed, parentSurface, env) {
+  const script = Object.hasOwn(env.scripts, placed.r.path) ? env.scripts[placed.r.path] : null;
+  const params = drawParams(placed.r, script);
+  const r = recoloured(placed.r, script, params);
+  const pl = r === placed.r ? placed : { ...placed, r };
   const surface = r.background && r.background !== "none" ? surfaceRgb(r.background, parentSurface) : parentSurface;
-  const script = Object.hasOwn(env.scripts, r.path) ? env.scripts[r.path] : null;
-  const params = drawParams(r, script);
   const restore = bgEsc(surface);
   let lines;
   if (r.desc.container) {
