@@ -35,6 +35,7 @@ export const gridKind = define({
   container: true,
   holds: "children",
   params: GRID_PARAMS,
+  cutEnd: (p) => p.cut ?? "end",
   measure(r, ctx) {
     const g = gridShape(r, ctx);
     if (!g.n) return ZERO;

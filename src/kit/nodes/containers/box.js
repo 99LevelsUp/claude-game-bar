@@ -10,7 +10,7 @@
 import { define } from "../define.js";
 import { vlen } from "../../text.js";
 import { BOX_PARAMS } from "./params.js";
-import { measureList, listRooms, placeList, drawList } from "./list.js";
+import { measureList, listRooms, placeList, drawList, listCutEnd, listStretches } from "./list.js";
 import { BOLD } from "../../ansi.js";
 import { blank, fitText, rgbOf, plainRgb, bgEsc, fgEsc } from "../paint.js";
 import { lineSet } from "../lines.js";
@@ -64,6 +64,15 @@ export const boxKind = define({
   container: true,
   holds: "children",
   params: BOX_PARAMS,
+  cutEnd: (p) => listCutEnd(p),
+  // A box's children stand in a column of their own whatever its direction: dropping one of them
+  // narrows every row of the box.
+  column: () => true,
+  stretchesAcross: (p) => listStretches(p),
+  decoLevels: (p) => decoLevels(p),
+  floor: (r, ctx) => measureBox(r, ctx, Math.max(...decoLevels(r.p))),
+  // A box with a fill draws its children on it (§7.3).
+  surface: (p) => (p.fill && p.fill !== "none" ? p.fill : null),
   measure: (r, ctx) => measureBox(r, ctx),
   rooms: (r, room, ctx) => listRooms(r, inner(room, decoration(r.p, r.deco || 0)), ctx),
   place(r, w, h, ctx) {

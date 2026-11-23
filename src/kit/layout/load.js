@@ -62,7 +62,7 @@ export const MAX_DRAWN = 2000;
 
 // The most nodes one render of `n` can draw: a switch draws one case, anything else all it holds.
 export function drawnSize(n) {
-  if (n.kind === "switch") return 1 + n.cases.reduce((m, c) => Math.max(m, drawnSize(c.node)), 0);
+  if (n.desc.holds === "cases") return 1 + n.cases.reduce((m, c) => Math.max(m, drawnSize(c.node)), 0);
   return 1 + n.children.reduce((s, k) => s + drawnSize(k), 0) + Object.values(n.places).reduce((s, k) => s + drawnSize(k), 0);
 }
 const ENTRY_KEYS = ["root", "vars", "before"];
@@ -251,7 +251,7 @@ function buildFile(data, file, add) {
       }
     }
     // `children` on a switch: cases without when, after any written cases.
-    if (kind === "switch") {
+    if (desc.holds === "cases") {
       for (const n of node.children) node.cases.push({ when: null, node: n });
       node.children = [];
     }

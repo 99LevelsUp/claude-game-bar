@@ -29,13 +29,13 @@ export const layersKind = define({
       }),
     };
   },
-  // Pictures below, glyphs above (§3.5): sprites are laid first, in their order, then every other
+  // Pictures below, glyphs above (§3.5): pictures (sprites) are laid first, in their order, then every other
   // layer in its order. A glyph keeps the background of what is under it.
   draw(pl, dc) {
     const { w, h } = pl;
     const key = dc.surfaceKey;
     const area = Array.from({ length: h }, () => parseCells(" ".repeat(w), key));
-    const order = [...pl.kids.filter((k) => k.r.kind === "sprite"), ...pl.kids.filter((k) => k.r.kind !== "sprite")];
+    const order = [...pl.kids.filter((k) => k.r.desc.pixels), ...pl.kids.filter((k) => !k.r.desc.pixels)];
     for (const k of order) {
       const lines = dc.drawKid(k);
       const [ha, va] = placeAlign(k.r.p.place || "center");
