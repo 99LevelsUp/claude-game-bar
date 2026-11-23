@@ -2,10 +2,7 @@
 import "../_temp-sandbox.mjs"; // before the modules that name temp paths
 import { statsValues } from "../../src/metrics/savings.js";
 import { RAW_SAMPLE } from "../_raw-sample.mjs";
-import { findSkin } from "../../src/skin-select.js";
-import { loadSkin } from "../../src/kit/skin/load.js";
-import { fitSkin } from "../../src/kit/skin/fit.js";
-import { drawFit } from "../../src/kit/skin/draw.js";
+import { drawEntry } from "../_v2-draw.mjs";
 import { vlen } from "../../src/kit/text.js";
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import os from "node:os";
@@ -158,9 +155,8 @@ try {
   ok(vlen("🪶") === 2, "lean icon 🪶 vlen 2");
   ok(vlen("📜") === 2, "lingua icon 📜 vlen 2");
 
-  // doom-full is the skin that carries the SAVE box (standard and minimal leave it out).
-  const full = loadSkin(findSkin("doom-full").file).skin;
-  const draw = (values) => drawFit(fitSkin(full, { values, width: 200 }), { values, width: 200 }).join("\n");
+  // The tall DOOM bar carries the SAVE box at 200 columns.
+  const draw = (values) => drawEntry("doom", { values, width: 200 }).lines.join("\n");
   const noSave = { ...RAW_SAMPLE };
   delete noSave["save.leanctx"];
   delete noSave["save.lingua"];

@@ -5,12 +5,7 @@
 import "../_temp-sandbox.mjs"; // before the modules that name temp paths
 import { RAW_SAMPLE } from "../_raw-sample.mjs";
 import { scrollWindow, vlen } from "../../src/kit/text.js";
-import { findGame } from "../../src/games/index.js";
-import { findSkin } from "../../src/skin-select.js";
-import { loadSkin } from "../../src/kit/skin/load.js";
-import { fitSkin } from "../../src/kit/skin/fit.js";
-import { drawFit } from "../../src/kit/skin/draw.js";
-import { createAssetResolver } from "../../src/platform/assets.js";
+import { drawEntry } from "../_v2-draw.mjs";
 
 let fails = 0;
 const ok = (c, m) => { console.log((c?"  ok   ":"  FAIL ")+m); if(!c) fails++; };
@@ -29,15 +24,8 @@ ok(r.start === 4 && r.down === 0, "few open -> bottom clamp");
 r = scrollWindow(4, 5, "boundary", 2);     // all fit
 ok(r.start === 0 && r.up === 0 && r.down === 0, "boundary all-fit -> top aligned");
 
-// The DOOM full skin drawn with `values` at `width` columns and render tick `tick`.
-const doom = findGame("doom");
-const resolveAsset = createAssetResolver({ folder: doom.dir }).resolve;
-const full = loadSkin(findSkin("doom-full").file).skin;
-const smaller = (name) => loadSkin(findSkin(name).file).skin;
-function bar(values, width, tick = 0) {
-  const fit = fitSkin(full, { values, width, loadSmaller: smaller });
-  return drawFit(fit, { values, width, ctx: { tick, step: "octant", resolveAsset } });
-}
+// The DOOM skin drawn with `values` at `width` columns and render tick `tick`.
+const bar = (values, width, tick = 0) => drawEntry("doom", { values, width, tick }).lines;
 
 // Every row of the bar has the same display width, even with an overflow marker (↑k / ↓k) on the
 // first or last visible agent row.

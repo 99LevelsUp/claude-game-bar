@@ -27,7 +27,7 @@ import { createAssetResolver } from "../src/platform/assets.js";
 export const NOW = 1793500000;
 export const strip = (s) => s.replace(/\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g, "");
 
-export function drawEntry(nameOrSkin, { width = 200, rows = Infinity, values = RAW_SAMPLE, reaction = null, now = NOW, step = "octant", scripts = null } = {}) {
+export function drawEntry(nameOrSkin, { width = 200, rows = Infinity, values = RAW_SAMPLE, reaction = null, now = NOW, step = "octant", scripts = null, tick = 0 } = {}) {
   const skin = typeof nameOrSkin === "string" ? findSkin(nameOrSkin) : nameOrSkin;
   const entry = skin.game || skin.entry !== undefined ? entryOf(skin) : entryOf({ ...skin, name: path.basename(skin.file, ".toml") });
   const loaded = loadSkinFile(skin.file);
@@ -39,7 +39,7 @@ export function drawEntry(nameOrSkin, { width = 200, rows = Infinity, values = R
     scope: createScope({ game: game ? game.vars : {}, skin: entry.vars, values, now, tick: 0 }), values,
     report: (w) => warnings.push(w),
   });
-  const ctx = { tick: 0, step, resolveAsset: assets.resolve, reaction, now };
+  const ctx = { tick, step, resolveAsset: assets.resolve, reaction, now };
   const fit = fitTree(root, { width, rows, env: ctx });
   let outputs = {};
   if (scripts && typeof scripts.runBatch === "function") {
