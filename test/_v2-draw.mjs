@@ -14,6 +14,7 @@
 import path from "node:path";
 import { RAW_SAMPLE } from "./_raw-sample.mjs";
 import { findSkin } from "../src/skin-select.js";
+import { findGame } from "../src/games/index.js";
 import { entryOf } from "../src/skin-assets.js";
 import { loadSkinFile } from "../src/kit/layout/load.js";
 import { resolveTree } from "../src/kit/layout/resolve.js";
@@ -30,7 +31,7 @@ export function drawEntry(nameOrSkin, { width = 200, rows = Infinity, values = R
   const skin = typeof nameOrSkin === "string" ? findSkin(nameOrSkin) : nameOrSkin;
   const entry = skin.game || skin.entry !== undefined ? entryOf(skin) : entryOf({ ...skin, name: path.basename(skin.file, ".toml") });
   const loaded = loadSkinFile(skin.file);
-  const game = skin.game || null;
+  const game = skin.game || findGame(loaded.game) || null;
   const folder = game ? game.dir : path.dirname(skin.file);
   const assets = createAssetResolver({ folder });
   const warnings = [];

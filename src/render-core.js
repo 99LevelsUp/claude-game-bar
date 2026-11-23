@@ -17,7 +17,7 @@ import { drawFit } from "./kit/layout/draw.js";
 import { warningLine, memoryStore, makeWarning } from "./kit/skin/warnings.js";
 import { createAssetResolver, recordUsage } from "./platform/assets.js";
 import { entryGames, entryOf } from "./skin-assets.js";
-import { defaultGame } from "./games/index.js";
+import { defaultGame, findGame } from "./games/index.js";
 import { selectSkin, findSkin } from "./skin-select.js";
 import { collectValues } from "./metrics/index.js";
 import { buildReaction } from "./metrics/reaction.js";
@@ -114,7 +114,8 @@ function renderSkin({ selected, data, env, now, warningStore, scripts, runScript
   // The folder the skin's own script paths are read from: a user skin's folder, a bundled skin's
   // game folder.
   const folder = !skin.user && skin.game && skin.game.dir ? skin.game.dir : path.dirname(skin.file);
-  const game = skin.game;
+  // A user skin that names a game (`game = "doom"`) draws with that game's style.
+  const game = skin.game || findGame(loadSkinFile(skin.file).game);
   const style = styleOf(game);
   warnings.push(...style.warnings);
 

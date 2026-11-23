@@ -8,9 +8,11 @@ import "../_temp-sandbox.mjs"; // before the modules that name temp paths
 import { RAW_SAMPLE } from "../_raw-sample.mjs";
 import { findGame } from "../../src/games/index.js";
 import { findSkin } from "../../src/skin-select.js";
-import { loadSkin } from "../../src/kit/skin/load.js";
-import { fitSkin } from "../../src/kit/skin/fit.js";
-import { drawFit } from "../../src/kit/skin/draw.js";
+import { entryOf } from "../../src/skin-assets.js";
+import { resolveTree } from "../../src/kit/layout/resolve.js";
+import { createScope } from "../../src/kit/layout/vars.js";
+import { fitTree } from "../../src/kit/layout/fit.js";
+import { drawFit } from "../../src/kit/layout/draw.js";
 import { runScripts } from "../../src/kit/skin/scripts.js";
 import { createScriptHost } from "../../src/platform/scripts/host.js";
 import { createAssetResolver } from "../../src/platform/assets.js";
@@ -23,8 +25,8 @@ const WIDTH = 160;
 const NOW = 1793500000;
 const doom = findGame("doom");
 const resolveAsset = createAssetResolver({ folder: doom.dir }).resolve;
-const SKIN = loadSkin(findSkin("doom-full").file).skin;
-const smaller = (name) => loadSkin(findSkin(name).file).skin;
+const SKIN = findSkin("doom");
+const ENTRY = entryOf(SKIN);
 const host = createScriptHost({ callBudgetMs: 2000, graceMs: 2000, startupMs: 5000 });
 
 // Session A: the sample values at the octant step, an ouch on its face. Session B: other values
@@ -40,9 +42,10 @@ const sessionB = () => ({ values: VALUES_B, step: "half", reaction: reactionTo(V
 
 // The steps a render takes, split so the test can put another session between them.
 const plan = (s) => {
-  const fit = fitSkin(SKIN, { values: s.values, width: WIDTH, loadSmaller: smaller });
-  return runScripts(fit, { host, state: s.state, values: s.values, reaction: s.reaction, now: NOW, tick: s.tick,
-    folderOf: () => doom.dir, resolveAsset });
+  const root = resolveTree(ENTRY.root, { scope: createScope({ game: doom.vars, values: s.values, now: NOW, tick: s.tick }), values: s.values });
+  const fit = fitTree(root, { width: WIDTH, rows: Infinity, env: { resolveAsset, step: s.step } });
+  return { fit, ...runScripts(fit, { file: SKIN.file, host, state: s.state, values: s.values, reaction: s.reaction, now: NOW, tick: s.tick,
+    folder: doom.dir, resolveAsset }) };
 };
 const build = (run, s) => drawFit(run.fit, { values: s.values, width: WIDTH, scripts: run.scripts,
   ctx: { tick: s.tick, step: s.step, resolveAsset, reaction: s.reaction, now: NOW } }).join("\n");

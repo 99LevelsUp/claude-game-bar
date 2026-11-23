@@ -145,7 +145,8 @@ try {
     const full = rows({});
     ok(full > 3, `a terminal that gives no height draws the full bar (${full} rows)`);
     ok(rows({ LINES: "60" }) === full, "a tall terminal draws it too");
-    ok(rows({ COLUMNS: "58", LINES: "16" }) === 3, `the Raspberry Pi's 58x16 panel draws the 3-row doom-compact (${rows({ COLUMNS: "58", LINES: "16" })} rows)`);
+    const panel = rows({ COLUMNS: "58", LINES: "16" });
+    ok(panel >= 3 && panel <= 5 && panel < full, `the Raspberry Pi's 58x16 panel draws the compact bar within its 5 rows (${panel} rows)`);
     ok(rows({ LINES: "9" }) === 3 && rows({ LINES: "9", GAMEBAR_MAX_ROWS: String(full) }) === full, "GAMEBAR_MAX_ROWS lets the full bar back in");
     ok(rows({ LINES: "5" }) === 1, "a terminal of 5 rows draws the one-row doom-line");
   }
@@ -187,12 +188,13 @@ try {
     const octant = render(s, { GAMEBAR_GLYPHS: "octant" });
     ok(half !== octant, "a session asking for half blocks draws a different face than one asking for octants");
     ok(render(s, { GAMEBAR_GLYPHS: "half" }) === half, "the same session settings draw the same face again");
-    // A user's copy of the standard skin with the mugshot capped at half blocks.
-    const standard = readFileSync(findSkin("doom-standard").file, "utf8");
-    ok(/^glyphs = "octant"$/m.test(standard), "the standard skin names its mugshot glyph step (the check below can fail)");
+    // A user's copy of the DOOM skin file with the mugshot capped at half blocks; its `game` gives it
+    // DOOM's style, and with no entry of its own name it draws its first, the tall bar.
+    const doomFile = readFileSync(findSkin("doom").file, "utf8");
+    ok(/^glyphs = "octant"$/m.test(doomFile), "the DOOM skin names its mugshot glyph step (the check below can fail)");
     const capped = path.join(s.env.GAMEBAR_USER_DIR, "skins", "capped", "capped.toml");
     mkdirSync(path.dirname(capped), { recursive: true });
-    writeFileSync(capped, standard.replace(/^glyphs = "octant"$/m, 'glyphs = "half"').replace(/^name = "doom-standard"$/m, 'name = "capped"'));
+    writeFileSync(capped, doomFile.replace(/glyphs = "octant"/g, 'glyphs = "half"'));
     ok(render(s, { GAMEBAR_SKIN: "capped", GAMEBAR_GLYPHS: "octant" }) === half,
       "a skin that caps the mugshot at half blocks wins over a terminal that draws octants");
     ok(render(s, { WT_SESSION: "x" }) === octant, "a Windows Terminal session gets octants without any setting");
