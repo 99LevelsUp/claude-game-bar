@@ -91,7 +91,8 @@ function drawNode(placed, parentSurface, env) {
   let lines;
   if (r.desc.container) {
     lines = r.desc.draw(pl, {
-      drawKid: (k) => drawNode(k, surface, env),
+      // A container that paints its own background (a box's fill) draws its children on it.
+      drawKid: (k, on = surface) => drawNode(k, on, env),
       restore, surface, surfaceKey: surface.join(";"),
       sep: fgEsc(plainRgb(r.color)), lines: env.lines, script, params,
     });

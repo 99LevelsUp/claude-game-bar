@@ -78,7 +78,9 @@ export const boxKind = define({
     const off = fill ? dc.restore : "";
     const innerW = Math.max(0, w - d.cols);
     const innerH = Math.max(0, h - d.rows);
-    const content = drawList(pl, { ...dc, restore: fill ? bgEsc(fill) : dc.restore }, p, innerW, innerH);
+    // The content is drawn on the fill: a child that sets the same background then does not reset it
+    // to the terminal's at its end, which left the box's right padding unfilled.
+    const content = drawList(pl, fill ? { ...dc, restore: bgEsc(fill), drawKid: (k) => dc.drawKid(k, fill) } : dc, p, innerW, innerH);
     const side = blank(d.padding);
     const titleRgb = rgbOf(p.title_color) || plainRgb(r.color);
     const lines = [];

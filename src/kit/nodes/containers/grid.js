@@ -77,7 +77,8 @@ export const gridKind = define({
     const pickInk = fgEsc(rgbOf(p.selected_color) || [255, 255, 255]);
     const fillRgb = p.fill && p.fill !== "none" ? rgbOf(p.fill) : null;
     const selFill = p.selected_fill === "none" ? null : rgbOf(p.selected_fill) || fillRgb;
-    const drawn = pl.kids.map((k) => dc.drawKid(k));
+    // Each cell's node is drawn on the cell's fill, like a box's content on its fill.
+    const drawn = pl.kids.map((k, i) => dc.drawKid(k, (isSel(i) ? selFill : fillRgb) || undefined));
     const [hAlign, vAlign] = placeAlign(p.cell_align);
 
     // A cell's line `y` (0 .. cell height), on the cell's fill.
