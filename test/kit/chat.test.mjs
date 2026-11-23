@@ -8,16 +8,15 @@ import { TEMP_SANDBOX } from "../_temp-sandbox.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const { VISUALS, elementKind, accepts } = await import("../../src/kit/elements/index.js");
-const { wrapMessage, playChat } = await import("../../src/kit/elements/chat.js");
+const { KINDS, kindOf } = await import("../../src/kit/nodes/index.js");
+const { wrapMessage, playChat } = await import("../../src/kit/nodes/visuals/chat.js");
 const { facts, conversations } = await import("../../src/kit/chat/metrics-library.js");
-const { loadSkin } = await import("../../src/kit/skin/load.js");
-const { fitSkin } = await import("../../src/kit/skin/fit.js");
-const { drawFit } = await import("../../src/kit/skin/draw.js");
+const { drawFit } = await import("../../src/kit/layout/draw.js");
 const { createScriptHost } = await import("../../src/platform/scripts/host.js");
 const { runScripts, createScriptPass } = await import("../../src/kit/skin/scripts.js");
 const { renderSession } = await import("../../src/render.js");
 const { vlen } = await import("../../src/kit/text.js");
+const { drawEntry } = await import("../_v2-draw.mjs");
 
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
@@ -26,7 +25,7 @@ const textOf = (parts) => parts.map((p) => p.text).join("");
 
 const USER = path.join(TEMP_SANDBOX, "user");
 
-// A session's raw metric values, as the producers emit them (src/metrics/catalogue.js).
+// A session's metric values, as the producers emit them (src/metrics/catalogue.js).
 const RAW = {
   "model.name": "Opus 5.5", "model.effort": "high", "model.window": "1M", "model.mode": [["thinking", "on"], ["fast", "off"]],
   "model.permission": "auto", "model.style": "default", "advisor.model": "Opus 4.8",
@@ -43,18 +42,16 @@ const RAW = {
   "sys.disk": 63, "sys.clock": "14:23", "sys.zombies": 3, "save.leanctx": "8.3k 63%", "save.lingua": "1.2k 1.3x",
 };
 
-const params = (given = {}) => {
-  const { params: p, problems } = VISUALS.chat.validate(given);
-  if (problems.length) throw new Error(JSON.stringify(problems));
-  return p;
-};
+const CHAT = KINDS.chat;
+// The chat's parameters: its defaults with `given` laid over them.
+const params = (given = {}) => ({ ...Object.fromEntries(Object.entries(CHAT.params).map(([k, s]) => [k, s.default])), ...given });
 
 // Every message the chat plays in one cycle of its conversations.
 const cycleOf = (values, libraries = [], given = {}) =>
   playChat({ facts: facts(values), libraries, params: params(given), now: 0, rows: 1 });
 const allText = (values, libraries, given) => cycleOf(values, libraries, given).script.map(textOf);
 
-// What a skin's chat element draws at every second of one cycle, by line.
+// What a skin's chat nodes draw at every second of one cycle, by line.
 function drawnCycle(fit, values, scripts, cycle) {
   const seen = [];
   for (let t = 0; t <= cycle; t++) seen.push(drawFit(fit, { values, width: 200, ctx: { tick: t, now: t, step: "octant" }, scripts }).map(plain));
@@ -67,19 +64,22 @@ function userSkin(name, toml, files = {}) {
   for (const [file, source] of Object.entries(files)) writeFileSync(path.join(dir, file), source);
   const file = path.join(dir, `${name}.toml`);
   writeFileSync(file, toml);
-  return file;
+  return { name, file, entry: null, game: null, user: true };
 }
-const load = (file) => {
-  const { skin, warnings } = loadSkin(file);
-  if (warnings.length) throw new Error(JSON.stringify(warnings));
-  return skin;
+// A skin drawn once at 200 columns, without scripts; it must load without a warning.
+const load = (skin) => {
+  const d = drawEntry(skin, { values: RAW, width: 200 });
+  if (d.loaded.warnings.length || d.warnings.length) throw new Error(JSON.stringify([...d.loaded.warnings, ...d.warnings]));
+  return d;
 };
 
-// A bar of chat elements one under another, each with its own libraries and settings.
-const chatSkin = (chats) => `version = 1
+// A bar of chat nodes one under another, each with its own libraries and settings.
+const chatSkin = (chats) => `version = 2
+[skin.main]
 root = "bar"
 [element.bar]
-kind = "column"
+kind = "list"
+direction = "vertical"
 children = [${chats.map((c) => `"${c.id}"`).join(", ")}]
 ${chats.map((c) => `[element.${c.id}]
 kind = "chat"
@@ -94,17 +94,16 @@ ${c.extra || ""}`).join("\n")}`;
 const host = createScriptHost({ callBudgetMs: 2000, graceMs: 2000, startupMs: 10000 });
 const testPass = () => createScriptPass({ budgetMs: 60000, callBudgetMs: 10000 });
 const NOW = 1_700_000_000;
-const run = (fit, values) => runScripts(fit, { host, pass: testPass(), values, reaction: null, now: NOW, tick: NOW, resolveAsset: () => null });
+const run = (d, values) => runScripts(d.fit, { file: d.skin.file, host, pass: testPass(), values, reaction: null, now: NOW, tick: NOW, resolveAsset: () => null });
 
 try {
   console.log("the chat is a platform visual");
   {
-    const c = VISUALS.chat;
-    ok(c && elementKind("chat") === c, "the chat is a metric visual a skin names by kind");
-    ok(accepts(c, "conversation") && c.accepts.length === 1, "it shows conversations");
-    const p = params();
-    ok(c.widths(p).min <= c.widths(p).natural && c.rows(p) >= 1, `it declares its widths and rows from its parameters (${JSON.stringify(c.widths(p))}, ${c.rows(p)})`);
-    ok(typeof c.libraries === "function" && c.libraries(params({ libraries: ["minecraft:conversations/x.js"] }))[0] === "minecraft:conversations/x.js",
+    ok(CHAT && kindOf("chat") === CHAT && !CHAT.container, "the chat is a visual a skin names by kind");
+    ok(CHAT.accepts.includes("conversation") && CHAT.accepts.length === 1, "it shows conversations");
+    const s = CHAT.size({ p: params() });
+    ok(s.min <= s.nat && s.rows >= 1 && s.minRows <= s.rows, `it reports its widths and rows (${JSON.stringify(s)})`);
+    ok(typeof CHAT.libraries === "function" && CHAT.libraries(params({ libraries: ["minecraft:conversations/x.js"] }))[0] === "minecraft:conversations/x.js",
       "it names the conversation libraries a skin gave it");
   }
 
@@ -120,7 +119,6 @@ try {
     fam.push("changed");
     ok(!facts({}).family.includes("changed"), "each render gets its own copy of the family");
 
-    // Context at 80 %: a line about it plays within one cycle.
     const at80 = { ...RAW, "context.hp": 80 };
     const { cycle } = cycleOf(at80);
     let heard = false;
@@ -130,7 +128,6 @@ try {
     }
     ok(heard, `with context at 80 %, a line about it plays within one cycle (${cycle}s)`);
 
-    // Everything the bar knows is said somewhere in the cycle.
     const all = allText(RAW).join("\n");
     const expected = ["status bar themes", "claude-game-bar", "main", "3 files changed", "high", "thinking is on",
       "fast mode off", "auto mode", "Opus 4.8", "78% full", "1M", "64%", "2h13m", "31%", "3d4h", "36%", "$1.83", "185 lines added",
@@ -178,10 +175,9 @@ try {
       "a skin's conversation under an existing key plays instead of the library's");
     const added = allText(RAW, [], { conversations: { "skin.hello": "Ada: hello {me}\nthe server restarts" } });
     ok(added.includes("<Ada> hello Opus 5.5") && added.includes("the server restarts"), "a skin adds a conversation of its own, speech and a plain line");
-    // The same from a skin file: the keys in quotes, as TOML needs for keys with dots.
     const fromFile = load(userSkin("chat-own", chatSkin([{ id: "talk", rows: 6,
       extra: 'drop = ["ctx.ask"]\nconversations = { "ctx.answer" = "me: from the skin, {ctx}%" }\n' }])));
-    const filed = drawnCycle(fitSkin(fromFile, { values: RAW, width: 200 }), RAW, {},
+    const filed = drawnCycle(fromFile.fit, RAW, {},
       cycleOf(RAW, [], { drop: ["ctx.ask"], conversations: { "ctx.answer": "me: from the skin, {ctx}%" } }).cycle).flat();
     ok(filed.some((l) => l.includes("<Opus 5.5> from the skin, 78%")) && !filed.some((l) => /how full is your context\?/.test(l)),
       "a skin file's drop list and conversations load without a warning and play");
@@ -193,42 +189,35 @@ try {
   console.log("conversation libraries run in the render pass");
   {
     const lib = (name, body) => `function conversations(f) { ${body} }`;
-    // A game library that replaces the neutral answer about context.
     const replace = load(userSkin("chat-replace", chatSkin([{ id: "talk", libraries: ["game.js"] }]), {
       "game.js": lib("game", 'return { conversations: { "ctx.answer": [["me", "my food bar is " + f.ctxLeft + "% full"]] } };'),
     }));
-    const fit = fitSkin(replace, { values: RAW, width: 200 });
-    const r = run(fit, RAW);
-    ok(r.warnings.length === 0 && Array.isArray(r.scripts.talk?.conversations), "the library's conversations reach the chat");
-    const lines = drawnCycle(r.fit, RAW, r.scripts, cycleOf(RAW, r.scripts.talk.conversations).cycle).flat();
+    const r = run(replace, RAW);
+    ok(r.warnings.length === 0 && Array.isArray(r.scripts["bar/talk"]?.conversations), "the library's conversations reach the chat");
+    const lines = drawnCycle(replace.fit, RAW, r.scripts, cycleOf(RAW, r.scripts["bar/talk"].conversations).cycle).flat();
     ok(lines.some((l) => l.includes("<Opus 5.5> my food bar is 22% full")), "the game's wording plays");
     ok(!lines.some((l) => /78% full, out of 1M/.test(l)), "and the neutral answer it replaced never does");
 
-    // Two chat elements, each with its own libraries.
     const two = load(userSkin("chat-two", chatSkin([{ id: "first", libraries: ["a.js"], rows: 6 }, { id: "second", libraries: ["b.js"], rows: 6 }]), {
       "a.js": lib("a", 'const c = {}; for (let i = 0; i < 40; i++) c["a." + i] = [["Ann", "only in the first " + i]]; return { conversations: c };'),
       "b.js": lib("b", 'const c = {}; for (let i = 0; i < 40; i++) c["b." + i] = [["Bob", "only in the second " + i]]; return { conversations: c };'),
     }));
-    const fit2 = fitSkin(two, { values: RAW, width: 200 });
-    const r2 = run(fit2, RAW);
-    const cycle2 = Math.max(cycleOf(RAW, r2.scripts.first.conversations).cycle, cycleOf(RAW, r2.scripts.second.conversations).cycle);
-    const frames = drawnCycle(r2.fit, RAW, r2.scripts, cycle2);
+    const r2 = run(two, RAW);
+    const cycle2 = Math.max(cycleOf(RAW, r2.scripts["bar/first"].conversations).cycle, cycleOf(RAW, r2.scripts["bar/second"].conversations).cycle);
+    const frames = drawnCycle(two.fit, RAW, r2.scripts, cycle2);
     const top = frames.flatMap((f) => f.slice(0, 6)).join("\n"), bottom = frames.flatMap((f) => f.slice(6, 12)).join("\n");
     ok(top.includes("only in the first") && !top.includes("only in the second"), "the first chat plays its own library only");
     ok(bottom.includes("only in the second") && !bottom.includes("only in the first"), "the second chat plays its own library only");
 
-    // A library that throws: the chat plays the metrics library and a warning names the library.
     const boom = load(userSkin("chat-boom", chatSkin([{ id: "talk", libraries: ["boom.js"] }]), {
       "boom.js": lib("boom", 'throw new Error("no wood");'),
     }));
-    const fit3 = fitSkin(boom, { values: RAW, width: 200 });
-    const r3 = run(fit3, RAW);
+    const r3 = run(boom, RAW);
     ok(r3.warnings.length === 1 && /boom\.js/.test(r3.warnings[0].message) && r3.warnings[0].key && r3.warnings[0].subject === "boom.js",
       `a warning in the loader's shape names the library (${r3.warnings[0]?.message})`);
-    const kept = drawnCycle(r3.fit, RAW, r3.scripts, cycleOf(RAW).cycle).flat();
+    const kept = drawnCycle(boom.fit, RAW, r3.scripts, cycleOf(RAW).cycle).flat();
     ok(kept.some((l) => /context 78% full/.test(l)), "and the chat keeps playing the metrics library");
 
-    // The one-shot status line runs no libraries; the daemon's render does.
     userSkin("chat-session", chatSkin([{ id: "talk", libraries: ["game.js"], rows: 6 }]), {
       "game.js": lib("game", 'const c = {}; for (let i = 0; i < 40; i++) c["g." + i] = [["Ann", "the game says " + i]]; return { conversations: c };'),
     });
@@ -258,8 +247,9 @@ try {
     const long = wrapMessage([{ text: "supercalifragilisticexpialidocious", role: "text" }], 10);
     ok(long.every((l) => vlen(textOf(l)) <= 10), "a word longer than the line is split");
     const p = params();
-    for (const width of [VISUALS.chat.widths(p).natural, VISUALS.chat.widths(p).min, 30]) {
-      const drawn = VISUALS.chat.draw({ value: undefined, params: p, width, height: 6, ctx: { now: 1005 }, script: {}, values: RAW });
+    const s = CHAT.size({ p });
+    for (const width of [s.nat, s.min, 30]) {
+      const drawn = CHAT.draw({ r: { p, color: null }, value: undefined, params: p, width, height: 6, surface: [0, 0, 0], ctx: { now: 1005 }, script: {}, values: RAW });
       ok(drawn.length === 6 && drawn.every((l) => vlen(l) === width) && !drawn.join("").includes("…"),
         `at ${width} columns every line is exactly as wide and messages wrap instead of being cut`);
     }
