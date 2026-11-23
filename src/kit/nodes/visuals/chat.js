@@ -104,28 +104,46 @@ function pauseFor(i) {
   return PAUSE_MIN_S + ((x ^ (x >>> 13)) >>> 0) % (PAUSE_MAX_S - PAUSE_MIN_S + 1);
 }
 
-const plainText = (parts) => parts.map((p) => p.text).join("");
+// The text a line asks with, before its placeholders are filled: whether it is a question does not
+// depend on the session.
+function written(line) {
+  if (typeof line === "string") return line;
+  if (!Array.isArray(line) || !line.length) return "";
+  if (isPlainObject(line[0])) return line.map((p) => (isPlainObject(p) && typeof p.text === "string" ? p.text : "")).join("");
+  const said = Array.isArray(line[1]) ? line[1][0] : line[1];
+  return typeof said === "string" ? said : "";
+}
 
 // What the chat plays at `now` (seconds): { script, messages, cycle }
-//   script    every message of one cycle, as styled parts, in order
+//   script    every message of one cycle that applies, as styled parts, in order
 //   messages  the `rows` most recent at `now`, oldest first (none when nothing applies)
 //   cycle     the seconds one cycle takes
+// Every line of the conversations has its moment in the cycle, whether it applies now or not: a
+// line that does not apply (a fact it names is not known) leaves the message before it showing for
+// its moment. So a condition that flips shows or hides that one line, and the chat does not jump
+// to another place in its cycle (#61).
 export function playChat({ facts: F, libraries = [], params: p, now = 0, rows = 1 }) {
   const { cast: own, lines } = merge([metricsLibrary(F), ...libraries], p);
   const cast = { ...own, me: F.model || "Claude" };
-  const script = lines.map((l) => message(l, cast, F)).filter(Boolean);
+  const all = lines.map((l) => message(l, cast, F));
+  const applies = all.map((m, i) => (m ? i : -1)).filter((i) => i >= 0);
+  const script = applies.map((i) => all[i]);
   if (!script.length) return { script, messages: [], cycle: 0 };
   const at = [];
   let t = 0;
-  script.forEach((m, i) => {
+  lines.forEach((l, i) => {
     at.push(t);
-    t += plainText(m).trim().endsWith("?") ? ANSWER_DELAY_S : pauseFor(i);
+    t += written(l).trim().endsWith("?") ? ANSWER_DELAY_S : pauseFor(i);
   });
   const pos = ((now % t) + t) % t;
   let idx = 0;
-  while (idx + 1 < script.length && at[idx + 1] <= pos) idx++;
+  while (idx + 1 < lines.length && at[idx + 1] <= pos) idx++;
+  // The latest line at or before `idx` that applies; before the first, the cycle's last one.
+  let k = applies.length - 1;
+  while (k >= 0 && applies[k] > idx) k--;
+  if (k < 0) k = applies.length - 1;
   const messages = [];
-  for (let i = rows - 1; i >= 0; i--) messages.push(script[(((idx - i) % script.length) + script.length) % script.length]);
+  for (let i = rows - 1; i >= 0; i--) messages.push(script[(((k - i) % script.length) + script.length) % script.length]);
   return { script, messages, cycle: t };
 }
 

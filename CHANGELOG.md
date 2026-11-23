@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The account's health accumulator is written atomically, and a file that is there but cannot be
   read or parsed at that moment (another session's write in flight) is left alone instead of
   being overwritten with sums starting from zero; one that stays broken for a minute is replaced.
+- **The chat no longer jumps when a fact comes or goes** (#61). Every line of the conversations
+  keeps its moment in the chat's cycle whether it applies or not; a line whose fact is not known
+  leaves the message before it showing, so the chat no longer skips to another place in its
+  cycle when, say, a subagent starts or the git status changes.
 
 ## [3.0.0] - 2026-11-23
 

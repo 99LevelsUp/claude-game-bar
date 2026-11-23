@@ -171,6 +171,27 @@ try {
     ok(others.size >= 3, `other pauses vary (${[...others].sort((a, b) => a - b).join(",")}s)`);
   }
 
+  console.log("a condition that flips (#61)");
+  {
+    // Ten lines; the fifth names {x}, a fact that comes and goes. Away from its moment the chat
+    // shows the same line whether it is known or not.
+    const conv = Array.from({ length: 10 }, (_, i) => (i === 4 ? "me: x is {x}" : `me: line ${i}`)).join("\n");
+    const p = params({ conversations: { flip: conv }, drop: Object.keys(conversations(facts(RAW)).conversations) });
+    const say = (F, t) => textOf(playChat({ facts: F, libraries: [], params: p, now: t, rows: 1 }).messages[0]);
+    const known = { ...facts(RAW), x: "here" }, unknown = { ...facts(RAW), x: null };
+    const { cycle } = playChat({ facts: known, libraries: [], params: p, now: 0, rows: 1 });
+    ok(playChat({ facts: unknown, libraries: [], params: p, now: 0, rows: 1 }).cycle === cycle,
+      `the cycle is as long whether the line applies or not (${cycle}s)`);
+    let differ = [], heard = false;
+    for (let t = 0; t < cycle; t++) {
+      const a = say(known, t), b = say(unknown, t);
+      if (a.includes("x is here")) { heard = true; if (!b.includes("line 3")) differ.push(t); }
+      else if (a !== b) differ.push(t);
+    }
+    ok(heard && differ.length === 0,
+      `only the line's own moment changes: without the fact the line before it stays (differs at ${differ.join(",") || "none"})`);
+  }
+
   console.log("a skin drops, changes and adds conversations");
   {
     const asked = (given) => allText(RAW, [], given).some((l) => /how full is your context\?/.test(l));
