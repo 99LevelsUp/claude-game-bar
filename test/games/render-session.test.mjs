@@ -213,6 +213,23 @@ try {
     ok(render(s, { WT_SESSION: "x" }) === octant, "a Windows Terminal session gets octants without any setting");
   }
 
+  // A user skin whose references fan out past the node cap draws the default game, and the warning
+  // line says why: the loader's warning reaches it.
+  {
+    const s = session("fanout", "fanout");
+    const file = path.join(s.env.GAMEBAR_USER_DIR, "skins", "fanout", "fanout.toml");
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, `version = 2\n[skin.fanout]\nroot = "l0"\n` +
+      Array.from({ length: 12 }, (_, i) => `[element.l${i}]\nkind = "list"\nchildren = ["l${i + 1}", "l${i + 1}", "l${i + 1}"]\n`).join("") +
+      `[element.l12]\nkind = "label"\ntext = "x"\n`);
+    const t = performance.now();
+    const out = strip(render(s, { GAMEBAR_SKIN: "fanout" })).trimEnd().split("\n");
+    const took = performance.now() - t;
+    const warned = out.filter((l) => l.startsWith("gamebar: "));
+    ok(warned.length === 1 && warned[0].includes("more than 2000 times"), `the warning line names the node cap (${JSON.stringify(warned)})`);
+    ok(out.length > 1 && took < 2000, `and the default game is drawn above it at once (${Math.round(took)} ms)`);
+  }
+
   // GAMEBAR_STATE in the passed env decides where the checkpoint is read and written.
   {
     const s = session("state", "state");

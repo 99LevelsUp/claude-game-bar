@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
-import { buildSkinFile, loadSkinFile, gameStyle } from "../../src/kit/layout/load.js";
+import { buildSkinFile, loadSkinFile, gameStyle, MAX_NODES } from "../../src/kit/layout/load.js";
 
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
@@ -100,6 +100,26 @@ ok(causes(build(`[skin.s]\nroot = "a"\nbefore = "g:x.js"\n[element.a]\nkind = "l
 ok(causes(buildSkinFile(parseToml(`version = 2`), "e.toml")).includes("no-skin"), "a file without skins is reported");
 const unreadable = loadSkinFile(path.join(here, "no-such-file.toml"));
 ok(causes(unreadable).includes("unreadable"), "a missing file is reported");
+
+console.log("a fan-out of references:");
+{
+  // Each level places the next one three times: 3^depth nodes at the bottom level.
+  const fan = (depth) => build(`[skin.s]\nroot = "l0"\n[skin.small]\nroot = "x"\n[element.x]\nkind = "label"\ntext = "ok"\n` +
+    Array.from({ length: depth }, (_, i) => `[element.l${i}]\nkind = "list"\nchildren = ["l${i + 1}", "l${i + 1}", "l${i + 1}"]\n`).join("") +
+    `[element.l${depth}]\nkind = "label"\ntext = "x"\n`);
+  const count = (n) => 1 + n.children.reduce((s, k) => s + count(k), 0);
+  const fits = fan(5);
+  ok(fits.entries.s && count(fits.entries.s.root) === 364 && !causes(fits).includes("too-many-nodes"),
+    `a fan-out under the cap builds every placement (${fits.entries.s ? count(fits.entries.s.root) : "no entry"} of ${MAX_NODES})`);
+  const t = performance.now();
+  const huge = fan(14);
+  const took = performance.now() - t;
+  ok(!huge.entries.s && causes(huge).filter((c) => c === "too-many-nodes").length === 1,
+    `one that would build 3^14 nodes is skipped with one warning (${causes(huge).join(", ")})`);
+  ok(!causes(huge).includes("no-root"), "and is not also reported as a lost root");
+  ok(took < 1000, `and stops at the cap instead of building it (${Math.round(took)} ms)`);
+  ok(huge.entries.small && huge.entries.small.root.id === "x", "the file's other entries still load");
+}
 
 console.log("the game's style:");
 const style = gameStyle({ vars: { panel: "#1c2036", context: 1 }, lines: { stone: "ABCDEFGHIJK", bad: "xy" } }, "game.toml");
