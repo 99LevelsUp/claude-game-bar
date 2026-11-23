@@ -28,7 +28,9 @@ export const meterKind = define({
     const p = r.p;
     const base = p.count * glyphWidth(p);
     const nat = base + (p.count - 1) * p.gap;
-    return { min: base, nat, max: nat, rows: 1, minRows: 1 };
+    // The gaps narrow together: a column less in each takes count - 1 columns at once, so the meter
+    // asks for its room in those steps and no column given to it goes unused.
+    return { min: base, nat, max: nat, rows: 1, minRows: 1, step: p.count > 1 ? p.count - 1 : 1 };
   },
   draw({ r, value, params: p, width, height }) {
     const has = typeof value === "number";
