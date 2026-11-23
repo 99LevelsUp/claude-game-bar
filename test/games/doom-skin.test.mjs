@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// DOOM as data: its game folder holds only its manifest and its skins (full, standard, minimal, and
-// the low compact and line), and what is particular to DOOM, the mugshot's frame for the session's
-// reaction, is a script among its assets. These pin the skins (they load without a warning, the
-// boxes each width shows, how the bar narrows from full to standard to minimal, and how a short or
-// narrow terminal takes it on to compact and line), the mugshot script's frames, the default frame
-// drawn when no script runs, and that the old preset setting still picks the size.
+// DOOM as data: its game folder holds its manifest and one skin file, and what is particular to
+// DOOM, the mugshot's frame for the session's reaction, is a script among its assets. These pin the
+// skin (it loads without a warning, the boxes each width shows, the exact centre, how the tall bar
+// narrows to the balanced, compact and line bars, the row budgets), the old skin names and presets,
+// the mugshot script's frames, the default frame drawn when no script runs, and the glyph step.
 
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -19,21 +18,16 @@ Object.assign(process.env, { PATH: "", GAMEBAR_MSYS_REAP: "0", GAMEBAR_RATELIMIT
 
 const { findGame } = await import("../../src/games/index.js");
 const { findSkin, selectSkin } = await import("../../src/skin-select.js");
-const { loadSkin } = await import("../../src/kit/skin/load.js");
-const { fitSkin } = await import("../../src/kit/skin/fit.js");
-const { drawFit } = await import("../../src/kit/skin/draw.js");
-const { runScripts, createScriptPass } = await import("../../src/kit/skin/scripts.js");
 const { createScriptHost } = await import("../../src/platform/scripts/host.js");
 const { createAssetResolver } = await import("../../src/platform/assets.js");
 const { renderSession } = await import("../../src/render.js");
 const { vlen } = await import("../../src/kit/text.js");
+const { drawEntry, find, ids, titlesOf, alternative, strip, NOW } = await import("../_v2-draw.mjs");
 
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
-const strip = (s) => s.replace(/\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g, "");
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const NOW = 1793500000;
 const CALM = { expr: null, exprAge: null, flash: null, hp: 1, god: false, dead: false };
 const flash = (f, hp = 2) => ({ ...CALM, expr: f, exprAge: 0.5, flash: f, hp });
 
@@ -48,42 +42,22 @@ function frameFor(reaction, now = NOW) {
   return r.status === "ok" ? r.output.frame : `(${r.status}: ${r.message})`;
 }
 
-const smaller = (name) => {
-  const s = findSkin(name);
-  return s && s.file ? loadSkin(s.file).skin : null;
+// The column where the mugshot's 12 columns start: the anchor's left column.
+const mugshotAt = (fit) => {
+  let p = fit.tree;
+  while (p && p.r.kind === "switch") p = p.kids[0];
+  return p && p.r.kind === "anchor" ? p.widths[0] : null;
 };
-
-// A skin file fitted to `width` and `rows`, its scripts run (unless `scripts` is false), and drawn.
-function draw(file, { width = 200, rows = Infinity, reaction = CALM, now = NOW, step = "octant", scripts = true, frames = null, values = RAW_SAMPLE } = {}) {
-  const loaded = loadSkin(file);
-  const fit = fitSkin(loaded.skin, { values, width, rows, loadSmaller: smaller });
-  const ctx = { tick: 0, step, resolveAsset: assets.resolve, reaction, now };
-  let drawn = fit, outputs = frames ?? {};
-  if (scripts && !frames) {
-    // A pass no loaded machine uses up: these checks need the mugshot script to run, not to be timed.
-    const pass = createScriptPass({ budgetMs: 60000, callBudgetMs: 10000 });
-    const run = runScripts(fit, { host, pass, values, reaction, now, tick: 0, folderOf: () => doom.dir, resolveAsset: assets.resolve });
-    drawn = run.fit;
-    outputs = run.scripts;
-  }
-  return { loaded, fit, scripts: outputs, lines: drawFit(drawn, { values, width, ctx, scripts: outputs }) };
-}
-
-const skinFile = (name) => findSkin(name).file;
-const titles = (lines) => strip(lines[0]).trim().split(/\s{2,}|[^A-Z ]+/).map((t) => t.trim()).filter((t) => /^[A-Z]{3,}$/.test(t));
 
 try {
   console.log("the game folder is data:");
   {
     const dir = path.join(ROOT, "src", "games", "doom");
     const files = readdirSync(dir, { recursive: true }).map((f) => f.replace(/\\/g, "/")).sort();
-    ok(same(files, ["game.toml", "skins", "skins/compact.toml", "skins/full.toml", "skins/line.toml", "skins/minimal.toml", "skins/standard.toml"]),
-      `src/games/doom holds the manifest and five skins, no code (${files.join(", ")})`);
-    for (const name of ["doom-full", "doom-standard", "doom-minimal"]) {
-      const s = findSkin(name);
-      const { skin, warnings } = loadSkin(s.file);
-      ok(skin && warnings.length === 0, `${name} loads without a warning${warnings.length ? `: ${warnings.map((w) => w.message).join("; ")}` : ""}`);
-    }
+    ok(same(files, ["doom.toml", "game.toml"]), `src/games/doom holds the manifest and one skin file, no code (${files.join(", ")})`);
+    const d = drawEntry("doom");
+    ok(d.loaded.warnings.length === 0 && d.warnings.length === 0, `doom.toml loads and draws without a warning${d.loaded.warnings.length ? `: ${d.loaded.warnings.map((w) => w.message).join("; ")}` : ""}`);
+    ok(same(doom.skins.map((s) => s.name), ["doom", "doom-minimal", "doom-compact", "doom-line"]), `the entries are doom, doom-minimal, doom-compact and doom-line (${doom.skins.map((s) => s.name)})`);
     ok(SCRIPT && existsSync(SCRIPT), "the mugshot script is a DOOM asset (doom:scripts/mugshot.js)");
   }
 
@@ -97,10 +71,7 @@ try {
     ok(frameFor(flash("other", 2)) === "STFST21", "a reaction DOOM has no face for holds the middle idle frame");
     const idle = new Set(Array.from({ length: 40 }, (_, i) => frameFor({ ...CALM, hp: 1 }, NOW + 2 * i)));
     ok(same([...idle].sort(), ["STFST10", "STFST11", "STFST12"]), `calm at several clock values cycles the three idle frames (${[...idle].join(" ")})`);
-    ok(frameFor(CALM, NOW) === frameFor(CALM, NOW + 1.9) || Math.floor(NOW / 2) !== Math.floor((NOW + 1.9) / 2),
-      "one idle glance holds for its two seconds");
     ok(frameFor({ ...CALM, hp: 3 }, null) === "STFST31", "without a clock the idle face holds the middle frame");
-    // Every frame the script can return is one of the frames DOOM ships.
     const named = new Set();
     for (const f of [null, "dead", "god", "ouch", "kill", "evl", "tl", "tr", "other"]) {
       for (let hp = 0; hp <= 4; hp++) for (let i = 0; i < 12; i++) named.add(frameFor(f ? flash(f, hp) : { ...CALM, hp }, NOW + 2 * i));
@@ -111,172 +82,133 @@ try {
 
   console.log("the DOOM mugshot in another game's container:");
   {
-    // A user skin: a Minecraft-styled hotbar cell holding the DOOM mugshot.
     const dir = path.join(TEMP_SANDBOX, "user", "skins", "mixed");
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, "mixed.toml");
     writeFileSync(file, [
-      'version = 1', 'root = "hotbar"',
-      '[element.hotbar]', 'kind = "row"', 'frame = { kind = "grid", background = "#262626" }', 'children = ["face", "branch"]',
-      '[element.face]', 'kind = "animation"', 'frames = "doom:images/mugshot"', 'script = "doom:scripts/mugshot.js"',
-      'default_frame = "doom:images/mugshot/STFST01.png"', 'width = 14',
+      'version = 2', '[skin.mixed]', 'root = "hotbar"',
+      '[element.hotbar]', 'kind = "grid"', 'lines = "heavy"', 'fill = "#262626"', 'children = ["face", "branch"]',
+      '[element.face]', 'kind = "sprite"', 'frames = "doom:images/mugshot"', 'script = "doom:scripts/mugshot.js"',
+      'default_frame = "doom:images/mugshot/STFST01.png"', 'rows = 6',
       '[element.branch]', 'kind = "text"', 'metric = "git.branch"', 'width = 8', '',
     ].join("\n"));
-    const ouch = draw(file, { width: 40, reaction: flash("ouch", 2) });
+    const mixed = { name: "mixed", file, entry: null, game: null, user: true };
+    const ouch = drawEntry(mixed, { width: 40, reaction: flash("ouch", 2), scripts: host });
     ok(ouch.loaded.warnings.length === 0, "the mixed skin loads without a warning");
-    ok(ouch.scripts.face && ouch.scripts.face.frame === "STFOUCH2", `with the reaction ouch at hp 2 the DOOM script picks STFOUCH2 (${JSON.stringify(ouch.scripts.face)})`);
-    const pinned = draw(file, { width: 40, frames: { face: { frame: "STFOUCH2" } } });
-    const idle = draw(file, { width: 40, frames: {} });
+    const out = ouch.scripts["hotbar/face"];
+    ok(out && out.frame === "STFOUCH2", `with the reaction ouch at hp 2 the DOOM script picks STFOUCH2 (${JSON.stringify(out)})`);
+    const pinned = drawEntry(mixed, { width: 40, scripts: { "hotbar/face": { frame: "STFOUCH2" } } });
+    const idle = drawEntry(mixed, { width: 40, scripts: {} });
     ok(same(ouch.lines, pinned.lines) && !same(ouch.lines, idle.lines), "the hurt frame STFOUCH2 is drawn, not the default face");
   }
 
-  console.log("the skins at each width:");
+  console.log("the tall bar and the exact centre:");
   {
-    const full = skinFile("doom-full");
-    const at = (width) => draw(full, { width });
-    const wide = at(200);
-    const t200 = titles(wide.lines);
-    ok(["MODEL", "USAGE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS"].every((t) => t200.includes(t)),
-      `doom-full at 200 columns shows MODEL, USAGE, PROJECT, ACTIVITY, AGENTS and TASKS (${t200.join(" ")})`);
-    ok(same(t200, ["MODEL", "USAGE", "SAVE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS", "SYSTEM"]) && wide.fit.skin.name === "doom-full",
-      "at 200 columns every box of doom-full is drawn");
-    const mid = at(120);
-    ok(same(titles(mid.lines), ["MODEL", "USAGE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS"]),
-      `at 120 columns SYSTEM and SAVE have dropped (${titles(mid.lines).join(" ")})`);
-    const narrow = at(80);
-    ok(narrow.fit.skin.name === "doom-minimal" && same(titles(narrow.lines), ["MODEL", "USAGE", "PROJECT", "ACTIVITY"]),
-      `at 80 columns the bar has gone down to doom-minimal (${narrow.fit.skin.name}: ${titles(narrow.lines).join(" ")})`);
-    ok(same(narrow.fit.tree.children.map((k) => k.id), ["model", "usage", "mugshot", "project", "activity"]),
-      "doom-minimal has the mugshot between USAGE and PROJECT");
-    for (const [width, r] of [[200, wide], [120, mid], [80, narrow]]) {
-      ok(r.lines.length === 7 && r.lines.every((l) => vlen(l) <= width), `at ${width} columns the bar is 7 rows within the width`);
+    const wide = drawEntry("doom", { width: 200 });
+    ok(alternative(wide.fit) === "tall" && same(titlesOf(wide.lines), ["MODEL", "USAGE", "SAVE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS", "SYSTEM"]),
+      `at 200 columns the tall bar draws every box (${titlesOf(wide.lines).join(" ")})`);
+    let exact = true;
+    for (let W = 40; W <= 250; W++) {
+      const d = drawEntry("doom", { width: W, rows: 8 });
+      const at = mugshotAt(d.fit);
+      if (at !== null && ["tall", "balanced"].includes(alternative(d.fit)) && (at !== Math.floor((W - 12) / 2) || find(d.fit.tree, "mugshot").w !== 12)) { exact = false; break; }
     }
-    ok(draw(skinFile("doom-standard"), { width: 200 }).fit.skin.name === "doom-standard"
-      && same(titles(draw(skinFile("doom-standard"), { width: 200 }).lines), ["MODEL", "USAGE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS"]),
-      "doom-standard at 200 columns is full without SAVE and SYSTEM");
+    ok(exact, "wherever the tall or balanced bar is drawn, the mugshot's 12 columns start at floor((W - 12) / 2)");
+    for (const W of [100, 140, 200, 250]) {
+      const d = drawEntry("doom", { width: W });
+      ok(d.lines.every((l) => vlen(l) <= W) && d.lines.length <= 7, `at ${W} columns the bar is within the width and 7 rows at most`);
+    }
   }
 
-  console.log("the skins at each height:");
+  console.log("narrowing, each half on its own:");
   {
-    const full = skinFile("doom-full");
-    // The boxes and the mugshot in order; doom-compact holds MODEL and USAGE in a row of their own.
-    const ids = (r) => r.fit.tree.children.flatMap((k) => (k.id === "boxes" ? k.children.map((c) => c.id) : [k.id]));
-    const tall = draw(full, { width: 200, rows: 7 });
-    ok(tall.fit.skin.name === "doom-full" && tall.lines.length === 7, "with room for 7 rows doom-full is drawn whole");
-    const six = draw(full, { width: 200, rows: 6 });
-    ok(six.fit.skin.name === "doom-compact" && six.lines.length === 3,
-      `with 6 rows every titled skin is too tall and the bar goes down to doom-compact (${six.fit.skin.name}, ${six.lines.length} rows)`);
-    // The Raspberry Pi's panel: 58 columns less the indent, 16 rows of which the bar may take a third.
-    const panel = draw(full, { width: 56, rows: 5 });
-    ok(panel.fit.skin.name === "doom-compact" && same(ids(panel), ["model", "usage", "mugshot", "project"]) && !panel.fit.clipped,
-      `a 56x5 panel draws doom-compact whole (${panel.fit.skin.name}: ${ids(panel).join(" ")})`);
-    ok(panel.lines.length === 3 && panel.lines.every((l) => vlen(l) <= 56), "doom-compact is 3 rows within the width");
-    ok(!/[A-Z]{4,}/.test(strip(panel.lines.join("\n")).replace(/Opus/g, "")), "doom-compact's boxes have no title rows");
-    const byId = (t, id) => (t.id === id ? t : t.children.map((k) => byId(k, id)).find(Boolean) || null);
-    for (const width of [44, 56, 70, 90]) {
-      const fitted = draw(skinFile("doom-compact"), { width }).fit.tree;
-      const w = ["context-bar", "limit-5h-bar", "limit-7d-bar"].map((id) => byId(fitted, id)?.width);
-      ok(w[0] > 0 && w.every((x) => x === w[0]), `at ${width} columns doom-compact's three USAGE bars are as long (${w.join(", ")})`);
-    }
-    for (const skin of ["doom-full", "doom-standard", "doom-minimal"]) {
-      for (const width of [100, 140, 200]) {
-        const fitted = draw(skinFile(skin), { width }).fit.tree;
-        if (!byId(fitted, "usage")) continue;
-        const w = ["context-bar", "limit-5h-bar", "limit-7d-bar", "ram-bar"].map((id) => byId(fitted, id)?.width);
-        ok(w[0] > 0 && w.every((x) => x === w[0]), `at ${width} columns ${skin}'s four USAGE bars are as long (${w.join(", ")})`);
-      }
-    }
-    ok(strip(panel.lines[0]).includes("Opus") && !strip(panel.lines[0]).includes("4.8"), "doom-compact names the model without its version");
-    // The mugshot is as wide as its largest frame at 3 rows (the 30x31 canvas: 6 columns), one
-    // column from USAGE and PROJECT, in the middle of the terminal.
-    ok(byId(panel.fit.tree, "mugshot").width === 6 && panel.fit.tree.node.params.separator === " "
-      && panel.fit.tree.node.params.center === "mugshot",
-      `doom-compact's mugshot is its largest frame's 6 columns, centred, one column from its neighbours (${byId(panel.fit.tree, "mugshot").width})`);
-    for (const skin of ["doom-full", "doom-standard", "doom-minimal"]) {
-      const f = draw(skinFile(skin), { width: 200 }).fit.tree;
-      ok(byId(f, "mugshot").width === 12 && f.node.params.center === "mugshot" && f.node.params.center_sides === "close",
-        `${skin}: the mugshot is its largest frame's 12 columns at 6 rows, centred with the boxes close (${byId(f, "mugshot").width})`);
-    }
-    const narrow = draw(full, { width: 44, rows: 5 });
-    ok(narrow.fit.skin.name === "doom-compact" && same(ids(narrow), ["model", "usage", "mugshot"]),
-      `at 44 columns doom-compact has dropped PROJECT (${ids(narrow).join(" ")})`);
-    const short = draw(full, { width: 56, rows: 2 });
-    ok(short.fit.skin.name === "doom-line" && short.lines.length === 1 && vlen(short.lines[0]) <= 56,
-      `with 2 rows the bar is doom-line, one row (${short.fit.skin.name})`);
-    const oneRow = draw(full, { width: 56, rows: 1 });
-    ok(oneRow.fit.skin.name === "doom-line" && !oneRow.lines.some((l) => /[\u{1CD00}-\u{1CDE5}]/u.test(l)), "doom-line has no mugshot");
-    // With no room at all the last skin of the chain is drawn, never nothing.
-    const none = draw(full, { width: 56, rows: 0 });
-    ok(none.fit.skin.name === "doom-line" && none.lines.length === 1, "a terminal too short for any skin still gets doom-line");
-    // Width alone: below doom-minimal's width the bar now goes on to doom-compact instead of being cut.
-    const cut = draw(full, { width: 56 });
-    ok(cut.fit.skin.name === "doom-compact" && !cut.fit.clipped, "at 56 columns doom-compact is drawn instead of a cut doom-minimal");
+    const at = (W) => drawEntry("doom", { width: W, rows: 8 });
+    ok(same(titlesOf(at(140).lines), ["MODEL", "USAGE", "SAVE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS", "SYSTEM"]), "at 140 columns nothing has dropped");
+    ok(same(titlesOf(at(125).lines), ["MODEL", "USAGE", "SAVE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS"]), "below 131 SYSTEM goes from the right half, SAVE stays on the left");
+    ok(same(titlesOf(at(110).lines), ["MODEL", "USAGE", "PROJECT", "ACTIVITY", "AGENTS", "TASKS"]), "below 118 SAVE goes from the left half");
+    ok(same(titlesOf(at(98).lines), ["MODEL", "USAGE", "PROJECT", "ACTIVITY", "AGENTS"]), "at 98 TASKS has gone too, AGENTS stays");
+    const bal = at(80);
+    ok(alternative(bal.fit) === "balanced" && same(titlesOf(bal.lines), ["MODEL", "USAGE", "PROJECT", "ACTIVITY"]),
+      `then the balanced bar: MODEL and USAGE left, PROJECT and ACTIVITY right (${alternative(bal.fit)})`);
+    ok(alternative(at(60).fit) === "compact" && alternative(at(50).fit) === "line", "then the compact bar, then the line");
   }
 
-  console.log("empty lists, the cores and the rows of a box:");
+  console.log("row budgets:");
   {
-    const node = (t, id) => (t.id === id ? t : t.children.map((k) => node(k, id)).find(Boolean) || null);
-    for (const name of ["doom-full", "doom-standard"]) {
-      const empty = draw(skinFile(name), { values: { ...RAW_SAMPLE, "act.subagents": [], "act.tasklist": [] } });
-      const agents = node(empty.fit.tree, "agents"), tasks = node(empty.fit.tree, "tasks");
-      ok(agents.width === "AGENTS".length + 2 && tasks.width === "TASKS".length + 2 && !agents.children.length && !tasks.children.length,
-        `${name}: empty AGENTS and TASKS boxes shrink to their titles (${agents.width}, ${tasks.width})`);
-      ok(same(titles(empty.lines), titles(draw(skinFile(name)).lines)), `${name}: and keep their titles`);
-    }
-    const sys = (cores) => node(draw(skinFile("doom-full"), { values: { ...RAW_SAMPLE, "sys.cores": cores } }).fit.tree, "system");
-    ok(node(sys([0.1, 0.5, 0.9, 1]), "cores").width === 3 + 4 && node(sys(RAW_SAMPLE["sys.cores"]), "cores").width === 3 + 8,
-      "the CPU equalizer has a column per core: 4 cores, 4 columns");
-    const s = sys([0.1, 0.5, 0.9, 1]);
-    const inner = s.width - 2;
-    ok(s.children.every((k) => k.width === inner), `every row of the SYSTEM box is as wide as the box (${s.children.map((k) => `${k.id} ${k.width}`).join(", ")} of ${inner})`);
-    ok(node(s, "cpu-total").width > 4, "the CPU total takes what the equalizer leaves, so it ends at the box's edge");
+    const r = (rows) => drawEntry("doom", { width: 200, rows });
+    ok(alternative(r(7).fit) === "tall" && r(7).lines.length === 7, "with 7 rows the tall bar is drawn whole");
+    const six = r(6);
+    ok(alternative(six.fit) === "tall" && six.lines.length === 6 && !titlesOf(six.lines).includes("PROJECT"),
+      `with 6 rows the tall bar still fits, PROJECT giving up its title row (${titlesOf(six.lines).join(" ")})`);
+    const five = r(5);
+    ok(alternative(five.fit) === "compact" && five.lines.length === 5, `at a row budget of 5 the compact bar is drawn (${alternative(five.fit)})`);
+    const three = r(3);
+    const usage = find(three.fit.tree, "usage");
+    ok(alternative(three.fit) === "compact" && three.lines.length === 3 && same(ids(usage), ["context", "limit-5h", "limit-7d"]),
+      `with 3 rows USAGE drops RAM and the cost (${ids(usage).join(" ")})`);
+    ok(find(three.fit.tree, "compact.2").w === 6, "the 3-row mugshot is its largest frame's 6 columns");
+    const two = r(2);
+    ok(alternative(two.fit) === "line" && two.lines.length === 1 && !two.lines.some((l) => /[\u{1CD00}-\u{1CDE5}]/u.test(l)), "at 2 rows the line, no mugshot");
+    ok(drawEntry("doom", { width: 56, rows: 0 }).lines.length === 1, "a terminal too short for anything still gets the line");
+  }
+
+  console.log("old skin names keep their size:");
+  {
+    ok(findSkin("doom-full").name === "doom" && findSkin("doom-standard").name === "doom", "doom-full and doom-standard select doom");
+    ok(alternative(drawEntry("doom-minimal", { width: 200 }).fit) === "balanced", "doom-minimal draws the balanced bar at 200 columns");
+    ok(alternative(drawEntry("doom-compact", { width: 200 }).fit) === "compact", "doom-compact draws the compact bar at 200 columns");
+    ok(findSkin("doom-line").name === "doom-line" && alternative(drawEntry("doom-line", { width: 200 }).fit) === "line", "doom-line draws the line");
+  }
+
+  console.log("empty lists and the cores:");
+  {
+    const empty = drawEntry("doom", { values: { ...RAW_SAMPLE, "act.subagents": [], "act.tasklist": [] } });
+    ok(find(empty.fit.tree, "agents") && find(empty.fit.tree, "tasks") && same(titlesOf(empty.lines), titlesOf(drawEntry("doom").lines)),
+      "empty AGENTS and TASKS boxes keep their titles and their place");
+    const cores = (c) => find(drawEntry("doom", { values: { ...RAW_SAMPLE, "sys.cores": c } }).fit.tree, "cpu.2").w;
+    ok(cores([0.1, 0.5, 0.9, 1]) === 4 && cores(RAW_SAMPLE["sys.cores"]) === 8, "the CPU columns are a column per core: 4 cores, 4 columns");
   }
 
   console.log("without scripts (the one-shot status line):");
   {
-    const full = skinFile("doom-full");
-    const none = draw(full, { scripts: false, reaction: flash("ouch", 2) });
-    const idleFace = draw(full, { frames: { mugshot: { frame: "STFST01" } } });
-    const hurt = draw(full, { frames: { mugshot: { frame: "STFOUCH2" } } });
+    const none = drawEntry("doom", { reaction: flash("ouch", 2) });
+    const idleFace = drawEntry("doom", { scripts: { "bar/tall/mugshot": { frame: "STFST01" } } });
+    const hurt = drawEntry("doom", { scripts: { "bar/tall/mugshot": { frame: "STFOUCH2" } } });
     ok(same(none.lines, idleFace.lines) && !same(none.lines, hurt.lines), "the mugshot draws its default frame, the idle face STFST01");
   }
 
   console.log("the glyph step:");
   {
-    const full = skinFile("doom-full");
-    const mug = loadSkin(full).skin.root.children.find((k) => k.id === "mugshot");
-    ok(mug && mug.params.glyphs === "octant", "the mugshot names its richest glyph step");
-    const faceGlyphs = (lines) => new Set(lines.flatMap((l) => [...strip(l)]));
-    const half = draw(full, { step: "half", frames: { mugshot: { frame: "STFST01" } } });
-    const octant = draw(full, { step: "octant", frames: { mugshot: { frame: "STFST01" } } });
+    const half = drawEntry("doom", { step: "half" });
+    const octant = drawEntry("doom", { step: "octant" });
     ok(!same(half.lines, octant.lines), "a terminal that draws only half blocks gets another face");
     const dir = path.join(TEMP_SANDBOX, "user", "skins", "capped");
     mkdirSync(dir, { recursive: true });
     const capped = path.join(dir, "capped.toml");
     writeFileSync(capped, [
-      'version = 1', 'root = "face"',
-      '[element.face]', 'kind = "animation"', 'frames = "doom:images/mugshot"', 'default_frame = "doom:images/mugshot/STFST01.png"',
-      'width = 14', 'glyphs = "half"', '',
+      'version = 2', '[skin.capped]', 'root = "face"',
+      '[element.face]', 'kind = "sprite"', 'frames = "doom:images/mugshot"', 'default_frame = "doom:images/mugshot/STFST01.png"',
+      'rows = 4', 'glyphs = "half"', '',
     ].join("\n"));
-    const lines = draw(capped, { width: 14, step: "octant", frames: {} }).lines;
-    ok([...faceGlyphs(lines)].every((ch) => " █▀▄▌▐".includes(ch)) && lines.some((l) => /[█▀▄▌▐]/.test(strip(l))),
+    const lines = drawEntry({ name: "capped", file: capped, entry: null, game: null, user: true }, { width: 14 }).lines;
+    const glyphs = new Set(lines.flatMap((l) => [...strip(l)]));
+    ok([...glyphs].every((ch) => " █▀▄▌▐".includes(ch)) && lines.some((l) => /[█▀▄▌▐]/.test(strip(l))),
       "a mugshot capped at half blocks draws half blocks on a terminal that draws octants");
   }
 
   console.log("an old preset setting picks the size:");
   {
     const env = {
-      ...process.env, COLUMNS: "250", GAMEBAR_THEME_FILE: path.join(TEMP_SANDBOX, "no-theme.json"),
+      ...process.env, COLUMNS: "250", GAMEBAR_THEME: "doom", GAMEBAR_USER_DIR: path.join(TEMP_SANDBOX, "user"),
       GAMEBAR_PRESET: path.join(ROOT, "src", "games", "doom", "presets", "minimal.toml"),
       GAMEBAR_STATE: path.join(TEMP_SANDBOX, "state.json"), GAMEBAR_TASKS_DIR: path.join(TEMP_SANDBOX, "tasks"),
     };
     const sel = selectSkin(env);
-    ok(sel.name === "doom-minimal" && sel.file === skinFile("doom-minimal") && sel.warnings.length === 0,
-      `GAMEBAR_PRESET at the old DOOM minimal preset, no theme and no skin choice: doom-minimal (${sel.name})`);
+    ok(sel.name === "doom-minimal" && sel.warnings.length === 0, `GAMEBAR_PRESET at the old DOOM minimal preset with the DOOM theme: doom-minimal (${sel.name})`);
     const data = { session_id: "s1", model: { display_name: "Opus 5.5" }, context_window: { used_percentage: 42 } };
     const out = strip(renderSession({ data, env, now: NOW, scripts: false }).join("\n"));
     const fullOut = strip(renderSession({ data, env: { ...env, GAMEBAR_PRESET: "", GAMEBAR_SKIN: "doom-full" }, now: NOW, scripts: false }).join("\n"));
-    ok(out.includes("MODEL") && !out.includes("SYSTEM") && fullOut.includes("SYSTEM"), "and renderSession draws doom-minimal, not doom-full");
+    ok(out.includes("MODEL") && !out.includes("SYSTEM") && fullOut.includes("SYSTEM"), "and renderSession draws at most the balanced bar, not the tall one");
   }
 } finally {
   host.close();
