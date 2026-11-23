@@ -209,6 +209,62 @@ ok(fit(cases, "s", 45).clipped, "no case fits: the last is drawn cut");
 ok(ids(fit(cases, "s", 45)).third, "the cut case is the last one");
 ok(cs(55, 0).third === undefined && cs(55, 0).second, "$width is the switch's room");
 
+// A switch nested in a narrower place reads its own room, not the terminal's (#95).
+const nested = load(`
+[skin.side]
+root = "a"
+[skin.row]
+root = "row"
+[skin.boxed]
+root = "bx"
+[element.a]
+kind = "anchor"
+left = "sw"
+center = "mid"
+[element.row]
+kind = "list"
+children = ["lead", "sw"]
+[element.bx]
+kind = "box"
+border = "light"
+padding = 1
+direction = "vertical"
+children = ["sw"]
+[element.sw]
+kind = "switch"
+cases = [
+  { when = "= $width >= 50", node = "wide" },
+  { node = "narrow" },
+]
+${box("mid", 40, 40)}
+${box("lead", 10, 10)}
+${box("wide", 12, 12)}
+${box("narrow", 6, 6)}
+`);
+const at = (entry, W) => ids(fit(nested, entry, W, 3));
+ok(at("side", 100).narrow && !at("side", 100).wide, "on an anchor side of 30 columns of 100, $width is the side's (narrow)");
+ok(at("side", 200).wide, "with 80 columns to the side it holds (wide)");
+ok(at("row", 100).wide && !at("row", 100).narrow, "in a row of a list across, which bounds no child, $width is the row's room (wide), not none");
+ok(at("boxed", 54).wide && at("boxed", 52).narrow, "in a box with a border and padding, $width is its inside: 50 of 54 holds, 48 of 52 does not");
+{
+  // A switch without conditions starts where it did: only conditions move.
+  const plain = load(`
+[skin.s]
+root = "a"
+[element.a]
+kind = "anchor"
+left = "sw"
+center = "mid"
+[element.sw]
+kind = "switch"
+children = ["wide", "narrow"]
+${box("mid", 40, 40)}
+${box("wide", 12, 12)}
+${box("narrow", 6, 6)}
+`);
+  ok(ids(fit(plain, "s", 100, 3)).wide, "a switch without conditions draws its first case that fits, as before");
+}
+
 console.log("the empty rule:");
 const empty = load(`
 [skin.s]
