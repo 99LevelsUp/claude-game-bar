@@ -20,13 +20,20 @@
 //   unreadable, parse-error, old-format, unknown-key, invalid-key, no-skin, no-root,
 //   no-kind, unknown-kind, unavailable, unknown-metric, type-mismatch, missing-child, cycle,
 //   unknown-param, invalid-param, bad-expression, room-outside-switch, jumping-param, bad-vars,
-//   too-many-nodes
+//   too-many-nodes, too-large
 //
-// An entry builds at most MAX_NODES nodes. References that fan out (an element placed several
-// times, each placing another several times) build a number of nodes that grows with the power of
-// the depth, all at once on the render daemon's one thread; an entry past the cap is skipped.
+// Two caps keep a skin from stalling the render daemon's one thread, which draws every session:
+//   MAX_BUILT  the nodes an entry builds, every switch case included. References that fan out (an
+//              element placed several times, each placing another several times) build a number
+//              of nodes that grows with the power of the depth, all at once; past the cap the entry
+//              is skipped (too-many-nodes).
+//   MAX_DRAWN  the most nodes one render can draw: a switch draws one of its cases, so it counts
+//              its largest, and every other node counts all its children. A skin of many large
+//              alternatives (one per race and size) builds them all but draws one; past this cap
+//              the entry is skipped too (too-large).
+// Each entry carries both counts as `nodes: { built, drawn }`.
 //
-// A loaded skin file: { file, game, entries: { <name>: { name, root, vars } }, warnings }. A node:
+// A loaded skin file: { file, game, entries: { <name>: { name, root, vars, nodes } }, warnings }. A node:
 //   { id, path, kind, desc, metric, vars, params, children, places, cases }
 //   params    every declared parameter of the kind and the shared settings (src/kit/nodes/schema.js),
 //             each { lit: value } (a literal, already checked) or { expr } (compiled, checked
@@ -48,8 +55,16 @@ import { compile, isComputed } from "./expr.js";
 import { checkVars } from "./vars.js";
 
 const TOP_KEYS = ["version", "game", "skin", "element"];
-// The most nodes one skin entry builds: the largest bundled entry (DOOM's tall bar) builds 145.
-export const MAX_NODES = 2000;
+// The node caps (see the top). The largest bundled entry, DOOM's tall bar, builds 145 nodes; a
+// render costs about 0.03 to 0.05 ms per drawn node.
+export const MAX_BUILT = 20000;
+export const MAX_DRAWN = 2000;
+
+// The most nodes one render of `n` can draw: a switch draws one case, anything else all it holds.
+export function drawnSize(n) {
+  if (n.kind === "switch") return 1 + n.cases.reduce((m, c) => Math.max(m, drawnSize(c.node)), 0);
+  return 1 + n.children.reduce((s, k) => s + drawnSize(k), 0) + Object.values(n.places).reduce((s, k) => s + drawnSize(k), 0);
+}
 const ENTRY_KEYS = ["root", "vars", "before"];
 // The parameters that name a line set.
 const LINE_PARAMS = new Set(["border", "lines", "selected_lines"]);
@@ -121,12 +136,12 @@ function buildFile(data, file, add) {
   const elements = isTable(data.element) ? data.element : {};
   if (Object.hasOwn(data, "element") && !isTable(data.element)) add("invalid-key", null, "element", `setting "element" must be a table of elements; ignored`);
 
-  // The nodes the entry being built has built so far; past MAX_NODES nothing more is built.
+  // The nodes the entry being built has built so far; past MAX_BUILT nothing more is built.
   let built = 0;
 
   // Builds a node from its table. `ctx`: { id, path, ancestors } of the place it is built for.
   function buildTable(el, id, nodePath, ancestors) {
-    if (++built > MAX_NODES) return null;
+    if (++built > MAX_BUILT) return null;
     const kind = el.kind;
     if (typeof kind !== "string") { add("no-kind", id, null, "has no kind; skipped"); return null; }
     const desc = kindOf(kind);
@@ -338,15 +353,20 @@ function buildFile(data, file, add) {
       if (typeof e.root === "string") root = buildRef(e.root, null, { parentId: null, parentPath: "", ancestors: new Set() });
       else if (isTable(e.root)) root = buildTable(e.root, `${name}.root`, `${name}.root`, new Set());
       else add("no-root", null, `skin.${name}`, `skin "${name}" names no root; skipped`);
-      if (built > MAX_NODES) {
-        add("too-many-nodes", null, `skin.${name}`, `skin "${name}" places its elements more than ${MAX_NODES} times; skipped`);
+      if (built > MAX_BUILT) {
+        add("too-many-nodes", null, `skin.${name}`, `skin "${name}" places its elements more than ${MAX_BUILT} times; skipped`);
         continue;
       }
       if (!root) {
         if (e.root !== undefined) add("no-root", null, `skin.${name}`, `skin "${name}" lost its root; skipped`);
         continue;
       }
-      entries[name] = { name, root, vars };
+      const drawn = drawnSize(root);
+      if (drawn > MAX_DRAWN) {
+        add("too-large", null, `skin.${name}`, `skin "${name}" can draw ${drawn} elements at once, more than ${MAX_DRAWN}; skipped`);
+        continue;
+      }
+      entries[name] = { name, root, vars, nodes: { built, drawn } };
     }
   }
   return entries;

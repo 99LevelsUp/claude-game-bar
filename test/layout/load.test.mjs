@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
-import { buildSkinFile, loadSkinFile, gameStyle, MAX_NODES } from "../../src/kit/layout/load.js";
+import { buildSkinFile, loadSkinFile, gameStyle, MAX_BUILT, MAX_DRAWN } from "../../src/kit/layout/load.js";
 
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
@@ -110,7 +110,8 @@ console.log("a fan-out of references:");
   const count = (n) => 1 + n.children.reduce((s, k) => s + count(k), 0);
   const fits = fan(5);
   ok(fits.entries.s && count(fits.entries.s.root) === 364 && !causes(fits).includes("too-many-nodes"),
-    `a fan-out under the cap builds every placement (${fits.entries.s ? count(fits.entries.s.root) : "no entry"} of ${MAX_NODES})`);
+    `a fan-out under the cap builds every placement (${fits.entries.s ? count(fits.entries.s.root) : "no entry"} of ${MAX_BUILT})`);
+  ok(fits.entries.s && fits.entries.s.nodes.built === 364 && fits.entries.s.nodes.drawn === 364, `an entry carries its counts (${JSON.stringify(fits.entries.s?.nodes)})`);
   const t = performance.now();
   const huge = fan(14);
   const took = performance.now() - t;
@@ -119,6 +120,21 @@ console.log("a fan-out of references:");
   ok(!causes(huge).includes("no-root"), "and is not also reported as a lost root");
   ok(took < 1000, `and stops at the cap instead of building it (${Math.round(took)} ms)`);
   ok(huge.entries.small && huge.entries.small.root.id === "x", "the file's other entries still load");
+}
+
+console.log("what a render can draw (#113):");
+{
+  // A row of 699 labels: 700 nodes. A switch of four such rows builds 2801 nodes and draws 701.
+  const row = `[element.row]\nkind = "list"\nchildren = [${Array(699).fill('"leaf"').join(", ")}]\n[element.leaf]\nkind = "label"\ntext = "x"\n`;
+  const alts = build(`[skin.s]\nroot = "sw"\n[element.sw]\nkind = "switch"\nchildren = ["row", "row", "row", "row"]\n` + row);
+  ok(alts.entries.s && alts.entries.s.nodes.built === 2801 && alts.entries.s.nodes.drawn === 701 && !causes(alts).length,
+    `a switch of four alternatives of 700 nodes loads: it builds 2801 but draws 701 (${JSON.stringify(alts.entries.s?.nodes)})`);
+  const wide = build(`[skin.s]\nroot = "all"\n[element.all]\nkind = "list"\nchildren = ["row", "row", "row"]\n` + row);
+  ok(!wide.entries.s && causes(wide).join(",") === "too-large" && wide.warnings[0].message.includes("2101") && wide.warnings[0].message.includes(String(MAX_DRAWN)),
+    `three of them side by side would draw 2101 at once and are skipped (${wide.warnings.map((w) => w.message).join("; ")})`);
+  const doom = loadSkinFile(path.join(here, "..", "..", "src", "games", "doom", "doom.toml"));
+  ok(doom.entries.doom.nodes.built === 145 && doom.entries.doom.nodes.drawn < 145,
+    `DOOM's tall bar builds 145 nodes and draws fewer, one size at a time (${JSON.stringify(doom.entries.doom.nodes)})`);
 }
 
 console.log("the game's style:");

@@ -23,11 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   game's assets) does not have, a frame the skin's script names that the frames folder lacks, and
   a file that is no picture still draw the default, now with a warning naming the reference
   (`asset-not-found`, `asset-unreadable`), so a typo no longer looks like a working skin.
-- **A skin whose references fan out can no longer stall the bar** (#97). One skin entry builds at
-  most 2000 nodes (DOOM's tall bar builds 145); an entry whose elements, placed in several places
-  each placing others several times, would build more is skipped with a `too-many-nodes`
-  warning, and the default game is drawn, instead of building a tree that grows with the power of
-  its depth on the render daemon's one thread.
+- **A skin whose references fan out can no longer stall the bar** (#97, #113). A skin entry
+  builds at most 20000 nodes, every `switch` alternative included, and one render may draw at
+  most 2000 of them (a switch counts its largest case; DOOM's tall bar builds 145). An entry past
+  either cap is skipped with a warning (`too-many-nodes`, `too-large`) and the default game is
+  drawn, instead of building a tree that grows with the power of its depth on the render daemon's
+  one thread. A skin of many large alternatives, one drawn at a time, stays within the caps.
 - **A switch's `when` reads its own room** (#95). `$width` and `$rows` in a case's condition were
   the terminal's room wherever the switch sat; they are now the room the switch was given (an
   anchor's side, a box's inside, a grid's cell), and a side its container does not bound keeps

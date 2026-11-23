@@ -226,7 +226,7 @@ try {
     const out = strip(render(s, { GAMEBAR_SKIN: "fanout" })).trimEnd().split("\n");
     const took = performance.now() - t;
     const warned = out.filter((l) => l.startsWith("gamebar: "));
-    ok(warned.length === 1 && warned[0].includes("more than 2000 times"), `the warning line names the node cap (${JSON.stringify(warned)})`);
+    ok(warned.length === 1 && warned[0].includes("more than 20000 times"), `the warning line names the node cap (${JSON.stringify(warned)})`);
     ok(out.length > 1 && took < 2000, `and the default game is drawn above it at once (${Math.round(took)} ms)`);
   }
 
