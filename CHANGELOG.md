@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A box without a border places its title by `title_align`** (#106). The title was always
+  drawn at the start of the box; the DOOM panel titles are now centred, as their skin asks.
+
 ## [3.0.0] - 2026-11-23
 
 The skin engine is new, and the skin format with it: a breaking change for skins of your own.
