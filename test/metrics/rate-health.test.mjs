@@ -8,7 +8,7 @@
 // It declines with CONSUMPTION (not speed) and is flat when idle.
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, existsSync, rmSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, existsSync, rmSync, readdirSync, writeFileSync, utimesSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -172,6 +172,38 @@ const near = (a, b, eps = 0.5) => Math.abs(a - b) <= eps;
     try { st = JSON.parse(readFileSync(path.join(tmp, "gamebar_ratehealth_global.json"), "utf8")); } catch {}
     ok(st && st.sum5 === 52 && st.sum7 === 10 && st.p5 === 42,
       `the old accumulator's learned sums carry over into gamebar_ratehealth_global.json (got ${JSON.stringify(st)})`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// 9c. The write race (#56): the accumulator is shared by every session, so a read can meet a file
+//     another process is writing. A file that is there but does not parse is left alone (writing
+//     over it would restart the learned sums), unless it has stayed broken for a minute; every
+//     write is atomic and leaves no temp file.
+{
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "gamebar-ratewire-race-"));
+  const healthFile = path.join(tmp, "gamebar_ratehealth_global.json");
+  const env = { ...process.env, GAMEBAR_PRESET: path.join(HERE, "..", "src", "games", "doom", "presets", "standard.toml"),
+    GAMEBAR_STATE: path.join(tmp, "state.json"), ...sandboxEnv(tmp), COLUMNS: "100" };
+  const run = (p5) => execFileSync(process.execPath, [STATUSLINE], { encoding: "utf8", env, input: JSON.stringify({
+    session_id: "race", context_window: { used_percentage: 20, context_window_size: 200000 },
+    rate_limits: { five_hour: { used_percentage: p5 }, seven_day: { used_percentage: 20 } }, model: { display_name: "Test" } }) });
+  try {
+    const torn = '{"p5":40,"p7":20,"sum5":5';
+    writeFileSync(healthFile, torn);
+    run(42);
+    ok(readFileSync(healthFile, "utf8") === torn, "a file that does not parse, written just now, is left as it is");
+    const old = new Date(Date.now() - 120000);
+    utimesSync(healthFile, old, old);
+    run(43);
+    let st = null;
+    try { st = JSON.parse(readFileSync(healthFile, "utf8")); } catch {}
+    ok(st && st.p5 === 43, `one that has stayed broken for two minutes is replaced (got ${JSON.stringify(st)})`);
+    run(45);
+    st = JSON.parse(readFileSync(healthFile, "utf8"));
+    ok(st.p5 === 45 && st.sum5 === 2, `and the sums go on from there (got ${JSON.stringify(st)})`);
+    ok(!readdirSync(tmp).some((f) => f.endsWith(".tmp")), "a write leaves no temp file");
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

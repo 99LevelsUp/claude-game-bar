@@ -2,7 +2,7 @@
 // sessions.
 
 import { createHash } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { runtimeDir, writeAtomic, readLearned, oldStateFile, FILE_PREFIX, OLD_FILE_PREFIX } from "../platform/runtime.js";
 import { envGet } from "../platform/env.js";
@@ -76,6 +76,14 @@ export function rateHeadroom(prev, cur) {
   return { headroom, state: { p5: cur.p5, p7: cur.p7, sum5, sum7 } };
 }
 
+// How long a health file that is there but cannot be read or parsed is left alone before it is
+// replaced: long enough to outlast a write of another process in flight, short enough that a file
+// left broken heals within a minute.
+const UNREAD_KEEP_MS = 60 * 1000;
+const keepUnread = (file) => {
+  try { return Date.now() - statSync(file).mtimeMs < UNREAD_KEEP_MS; } catch { return false; }
+};
+
 // I/O wrapper: pull the rate-limit percentages from the payload, fold the persisted accumulator
 // through rateHeadroom, persist it, return the headroom (or null when there are no rate limits
 // -> hpRow uses its context fallback).
@@ -101,11 +109,16 @@ export function rateHealthValue(data, env = process.env) {
   const oldGlobal = () => oldStateFile(`${OLD_FILE_PREFIX}ratehealth_global.json`);
   const { text: raw, old } = readLearned(file, () => (key && existsSync(globalFile) ? globalFile : oldGlobal()));
   let prev = null;
-  try { prev = JSON.parse(raw); } catch { /* no accumulator yet */ }
+  try { prev = JSON.parse(raw); } catch { /* no accumulator yet, or one that cannot be read now */ }
+  if (prev !== null && (typeof prev !== "object" || Array.isArray(prev))) prev = null;
   const { headroom, state } = rateHeadroom(prev, cur);
+  // Every session of the account (and a second installation's daemon) reads and writes this file.
+  // A write is atomic, so no reader sees half of one; and a file that is there but cannot be read or
+  // parsed right now is left alone, since writing over it would restart the learned sums from
+  // nothing. Only a file that has stayed unreadable for a while is replaced (#56).
   const text = JSON.stringify(state);
-  if (old || text !== raw) {
-    try { writeFileSync(file, text); } catch { /* ignore */ }
+  if ((old || text !== raw) && (prev !== null || !keepUnread(file))) {
+    try { writeAtomic(file, text); } catch { /* ignore: the next render retries */ }
   }
   return headroom;
 }
