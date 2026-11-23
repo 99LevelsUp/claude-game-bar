@@ -47,6 +47,15 @@ for (const k of ["WT_SESSION", "TERM_PROGRAM", "TERM", "TMUX", "VTE_VERSION", "G
 const { renderSession } = await import("../../src/render.js");
 const { rowsOf } = await import("../../src/render-core.js");
 const { findSkin } = await import("../../src/skin-select.js");
+const { createScriptHost } = await import("../../src/platform/scripts/host.js");
+const { createScriptPass } = await import("../../src/kit/skin/scripts.js");
+
+// The renders below run the skin's scripts through a host of their own with a budget no script can
+// run past. With the default 20 ms a cold worker's first call can time out, which turns the
+// mugshot's script off for 30 s of real time, so whether two renders drew the same face would
+// depend on how long the test took (the script budget has its own tests).
+const HOST = createScriptHost({ callBudgetMs: 10_000 });
+const scripts = () => ({ host: HOST, pass: createScriptPass({ budgetMs: 60_000, callBudgetMs: 10_000 }) });
 
 const NOW_MS = 1793500000123;
 const NOW = NOW_MS / 1000;
@@ -78,6 +87,10 @@ function session(name, label, usd = 1) {
     GAMEBAR_STATE: path.join(dir, "state", "checkpoint.json"), GAMEBAR_TASKS_DIR: path.join(dir, "tasks"),
     GAMEBAR_EVENTS: path.join(dir, "events.jsonl"), GAMEBAR_LLMLINGUA: path.join(dir, "ling.json"),
     GAMEBAR_RATELIMITS: path.join(dir, "rl.json"), GAMEBAR_USER_DIR: path.join(SB, "user"),
+    // The CPU is sampled once and held: a second sample a real second later would bring the per-core
+    // columns in (from the pinned, unchanging CPU times), so two renders would differ by how long
+    // the test took between them.
+    GAMEBAR_COLLECT_MS: "1e12",
   };
   const data = {
     session_id: `sid-${name}`, session_name: `${label}-run`, cwd: path.join(dir, "proj"),
@@ -86,7 +99,7 @@ function session(name, label, usd = 1) {
   };
   return { dir, env, data };
 }
-const render = (s, over = {}) => renderSession({ data: s.data, env: { ...s.env, ...over }, now: NOW }).join("\n") + "\n";
+const render = (s, over = {}) => renderSession({ data: s.data, env: { ...s.env, ...over }, now: NOW, scripts: scripts() }).join("\n") + "\n";
 
 try {
   // The first render after start-up has no earlier CPU sample to diff against; take it here, so
@@ -160,7 +173,7 @@ try {
     // Without `env`, renderSession reads process.env: set the same settings there and compare.
     const saved = { ...process.env };
     Object.assign(process.env, s.env, { GAMEBAR_PRESET: path.join(PRESETS, "full.toml"), COLUMNS: "250" });
-    const viaProcess = renderSession({ data: s.data, now: NOW }).join("\n") + "\n";
+    const viaProcess = renderSession({ data: s.data, now: NOW, scripts: scripts() }).join("\n") + "\n";
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
     Object.assign(process.env, saved);
     ok(full === viaProcess, "a preset passed in env renders the same as that preset set in process.env");
@@ -222,7 +235,7 @@ try {
       [k === "GAMEBAR_STATE" ? "MUGSHOT_STATE" : k.replace(/^GAMEBAR_/, "DOOMBAR_"), v]));
     ok(Object.keys(oldEnv).every((k) => !k.startsWith("GAMEBAR_")) && oldEnv.MUGSHOT_STATE === s.env.GAMEBAR_STATE,
       "precondition: the session's settings are spelled with the old names only");
-    ok(renderSession({ data: s.data, env: oldEnv, now: NOW }).join("\n") + "\n" === base,
+    ok(renderSession({ data: s.data, env: oldEnv, now: NOW, scripts: scripts() }).join("\n") + "\n" === base,
       "a session that sets only the old names renders exactly as with the new ones");
     ok(render(s, { GAMEBAR_PRESET: path.join(PRESETS, "full.toml"), DOOMBAR_PRESET: path.join(PRESETS, "minimal.toml"), COLUMNS: "250" })
       === render(s, { GAMEBAR_PRESET: path.join(PRESETS, "full.toml"), COLUMNS: "250" }), "with both names set, the new one wins");
