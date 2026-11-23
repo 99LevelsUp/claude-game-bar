@@ -93,7 +93,7 @@ export function renderSessionWith(runScripts, { data, env = process.env, now = D
     if (!fallback || fallback.file === selected.file) throw err;
     const failed = makeWarning({ key: `render|failed|${selected.name}`, cause: "render-failed", subject: selected.name,
       message: `skin ${selected.name} failed to draw (${err && err.message ? err.message : err}); drawing ${fallback.name}` });
-    return draw({ ...fallback, warnings: [...(fallback.warnings || []), failed] });
+    return draw({ ...fallback, warnings: [...selected.warnings, failed] });
   }
 }
 

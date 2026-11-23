@@ -39,6 +39,9 @@ Saved skin choices keep working.
   leaves the cost out.
 - **A script's `selected`** may be one index or a list of indices or child ids, so a grid can
   select several cells; a script's state is kept per placement of its node.
+- **Sizes in a skin stop at 1000 columns and 200 rows** (`width`, `min_width`, `max_width`,
+  `rows`, `min_rows`, and a kind's `gap`, `padding`, `columns`, `count`). A larger value, written
+  or computed, is reported under the bar and its default is used.
 
 ### Added
 
@@ -51,6 +54,8 @@ Saved skin choices keep working.
 - Two metrics, `save.leanctx.share` and `save.lingua.share`: the share of the original tokens
   that lean-ctx and LLMLingua saved this session, as a percentage. LLMLingua's share is its
   last saved percentage, or comes from its compression ratio when that is all it reports.
+- **A skin that fails while it is drawn no longer blanks the bar.** The default game's default
+  skin is drawn instead, and the line under the bar names the skin and the error.
 - Every metric in the catalogue has a semantic type (percent, count, money, duration, time,
   ratio, label, name, enum, flags, counts, items, series, channels, conversation), and the
   formatted types have one bounded formatter each, so a value is never wider than its type
