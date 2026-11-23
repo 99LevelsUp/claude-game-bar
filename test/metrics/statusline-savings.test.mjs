@@ -184,7 +184,8 @@ try {
       writeFileSync(path.join(rt, "doombar", "savings_resumed.json"), JSON.stringify({ offset: 0, saved: 8300, original: 10000 }));
       const env = { XDG_RUNTIME_DIR: rt, GAMEBAR_EVENTS: ev, GAMEBAR_LLMLINGUA: MISSING };
       const v = statsValues({ session_id: "resumed" }, CWD, env);
-      ok(v["save.leanctx"] === "8.3k 83%", `the old runtime directory's savings total carries over (got ${v["save.leanctx"]})`);
+      ok(v["save.leanctx"] === 8300 && v["save.leanctx.share"] === 83,
+        `the old runtime directory's savings total carries over (got ${v["save.leanctx"]} and ${v["save.leanctx.share"]} %)`);
       ok(existsSync(path.join(rt, "gamebar", "savings_resumed.json")), "and it is written to the new runtime directory");
     } finally {
       rmSync(rt, { recursive: true, force: true });
