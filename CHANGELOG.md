@@ -61,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   box's title); its children kept the colour they had inherited before the scripts ran. Now a
   child that sets no colour of its own takes it, at any depth, as it would take the skin's. No
   bundled script recolours a container, so no bundled bar changes.
+- **A short time to a reset is rounded, not cut** (#130). When the bar is tight, a duration keeps
+  only its largest unit, and that unit was cut: a 5-hour reset 1 h 49 min away read `1h`, almost an
+  hour early. It is now rounded to the nearest: `2h`; 4 h 59 min reads `5h`, 23 h 40 min `1d`. The
+  full form (`1h49m`) is unchanged.
 
 ### Changed
 

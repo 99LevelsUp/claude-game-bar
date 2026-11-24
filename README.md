@@ -214,7 +214,7 @@ default_frame = "doom:images/mugshot/STFST01.png"
 rows = 6
 ```
 
-A value is sized by its type, never by the value itself, so the bar does not jump when a number gets a digit: a percentage is four columns (`100%`, or `100` when space is short), a duration five (`4h59m`, or `4h`), money six (`$12.34`, or `$12`).
+A value is sized by its type, never by the value itself, so the bar does not jump when a number gets a digit: a percentage is four columns (`100%`, or `100` when space is short), a duration five (`4h59m`, or `5h`, rounded), money six (`$12.34`, or `$12`).
 
 Any parameter can be a variable (`"$panel"`, from the game's `[vars]`) or an expression starting with `=`: `color = "= case when $context.hp > 80 then $bad else $good end"`. Every metric is a variable under its catalogue id. Expressions are read by the bar itself, never run as code.
 

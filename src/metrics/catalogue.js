@@ -10,7 +10,7 @@
 //   percent       a number from 0 to 100                     formatted: "100%", compact "100"
 //   count         a whole number of 0 or more                formatted: "12.3k", compact "12k"
 //   money         US dollars                                 formatted: "$12.34", compact "$12"
-//   duration      seconds                                    formatted: "4h59m", compact "4h"
+//   duration      seconds                                    formatted: "4h59m", compact "5h" (rounded)
 //   time          the local time of day, seconds since midnight   formatted: "14:23"
 //   ratio         [done, total]                              formatted: "2/5", compact "2"
 //   label         a short name (the skin gives its width)
