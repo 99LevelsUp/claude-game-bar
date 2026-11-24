@@ -91,12 +91,16 @@ function greyParams(params) {
 // and loses NUL bytes, which a bash variable cannot hold and `read -d ''` stops at.
 const normalise = (lines) => lines.flatMap((l) => String(l).replace(/\0/g, "").split(/\r?\n|\r/));
 
-// The OFFLINE copy of a rendered body: every colour mapped to grey, every visible character and
-// every line kept, and the marker appended to the last line (an empty body greys to the marker).
+// A rendered body with every colour mapped to grey, every visible character and every line kept.
+export function greyBody(lines) {
+  return normalise(lines).map((l) => l.replace(/\x1b\[([0-9;:]*)m/g, (_, p) => `\x1b[${greyParams(p)}m`));
+}
+
+// The OFFLINE copy of a rendered body: the grey body with the marker appended to the last line
+// (an empty body greys to the marker).
 export function greyLines(lines) {
-  const body = normalise(lines);
-  if (!body.length) return [OFFLINE_MARKER];
-  const grey = body.map((l) => l.replace(/\x1b\[([0-9;:]*)m/g, (_, p) => `\x1b[${greyParams(p)}m`));
+  const grey = greyBody(lines);
+  if (!grey.length) return [OFFLINE_MARKER];
   grey[grey.length - 1] += OFFLINE_MARKER;
   return grey;
 }

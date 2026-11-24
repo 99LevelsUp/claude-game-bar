@@ -145,6 +145,54 @@ try {
     unlinkSync(payloadFile("first"));
   }
 
+  // The blank frame (#35): the skin of the session seen last, drawn empty and grey, renewed every
+  // pass, for the client of a session that has no frame yet.
+  {
+    const startFile = path.join(TMPDIR, path.basename(daemonPaths(HASH).start));
+    const s = session("blank-src");
+    const now = Date.now();
+    const state = roomyState({ now });
+    runPass(state, { dir: TMPDIR, hash: HASH, now });
+    const f = parseFrame(existsSync(startFile) ? readFileSync(startFile, "utf8") : "");
+    const body = f ? f.slots[0].lines : [];
+    const colours = body.join("").match(/\x1b\[[0-9;]*m/g) || [];
+    const rgb = colours.flatMap((c) => [...c.matchAll(/[34]8;2;(\d+);(\d+);(\d+)/g)].map((m) => m.slice(1)));
+    ok(f && f.deadline === now * 1000 + 3e6, "the pass writes the blank frame with the session's deadline");
+    ok(body.length > 1 && rgb.length > 0 && rgb.every(([r, g, b]) => r === g && g === b), "the blank frame is the skin drawn in grey");
+    ok(!body.join("").includes("OFFLINE") && f.grey.join("").includes("OFFLINE"), "only its grey copy is marked OFFLINE");
+    ok(strip(body.join("\n")).includes("0%") && !strip(body.join("\n")).includes("42%"), "it shows empty values, not the session's");
+    const later = now + 500;
+    s.fwd.COLUMNS = "120";
+    s.write();
+    runPass(state, { dir: TMPDIR, hash: HASH, now: later });
+    const g = parseFrame(readFileSync(startFile, "utf8"));
+    ok(g && g.deadline === later * 1000 + 3e6, "every pass renews it");
+    ok(g && Math.max(...g.slots[0].lines.map((l) => strip(l).length)) < Math.max(...body.map((l) => strip(l).length)),
+      "a session whose terminal changed size gets it drawn again");
+    unlinkSync(payloadFile("blank-src"));
+    runPass(state, { dir: TMPDIR, hash: HASH, now: later + 500 });
+    const h = parseFrame(readFileSync(startFile, "utf8"));
+    ok(h && h.deadline === g.deadline, "with no session left it is not renewed, so it greys on its deadline");
+
+    // Two sessions in terminals of different widths take turns being the last one seen: each one's
+    // blank frame is drawn once, not on every pass.
+    const x = session("blank-x", { env: { COLUMNS: "200" } });
+    const y = session("blank-y", { env: { COLUMNS: "90" } });
+    const draws0 = state.blankDraws;
+    const widths = new Set();
+    for (let i = 0; i < 8; i++) {
+      (i % 2 ? x : y).write();
+      runPass(state, { dir: TMPDIR, hash: HASH, now: later + 1000 + i * 500 });
+      const k = parseFrame(readFileSync(startFile, "utf8"));
+      widths.add(Math.max(...k.slots[0].lines.map((l) => strip(l).length)));
+    }
+    ok(state.blankDraws - draws0 === 2 && widths.size === 2,
+      `alternating sessions each get their own blank frame, drawn once (${state.blankDraws - draws0} draws, ${widths.size} widths)`);
+    unlinkSync(payloadFile("blank-x"));
+    unlinkSync(payloadFile("blank-y"));
+    unlinkSync(startFile);
+  }
+
   // An unchanged payload for 60 simulated seconds: every pass renews the deadline, and the body
   // still follows the clock (crossing a minute boundary) and matches renderSession at that moment.
   {

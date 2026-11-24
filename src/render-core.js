@@ -20,7 +20,8 @@ import { entryGames, entryOf } from "./skin-assets.js";
 import { defaultGame, findGame } from "./games/index.js";
 import { selectSkin, findSkin } from "./skin-select.js";
 import { collectValues } from "./metrics/index.js";
-import { buildReaction } from "./metrics/reaction.js";
+import { buildReaction, calmReaction } from "./metrics/reaction.js";
+import { blankValues } from "./metrics/catalogue.js";
 import { envGet } from "./platform/env.js";
 import { isPlainObject } from "./kit/is.js";
 
@@ -81,13 +82,23 @@ export function rowsOf(env) {
 //
 // `session`, { values, reaction }, draws those instead of what the payload gives: tests draw a fixed
 // session through the whole render (test/games/render-parity.test.mjs).
-export function renderSessionWith(runScripts, { data, env = process.env, now = Date.now() / 1000, warningStore = processStore, scripts = {}, session = null }) {
+//
+// `blank` draws the skin empty: every metric at its type's empty value (blankValues in
+// src/metrics/catalogue.js), a calm reaction, no scripts (the mugshot shows its default face), no
+// warning line, and `ctx.blank` set, so a node that would make something up from those values (the
+// chat) draws nothing. The render daemon shows it to a session that has no frame yet (#35); `data`
+// is not read.
+export function renderSessionWith(runScripts, { data, env = process.env, now = Date.now() / 1000, warningStore = processStore, scripts = {}, session = null, blank = false }) {
   // A shallow copy: the rate-limit merge in collectValues rewrites data.rate_limits, and a caller
   // that keeps the payload between renders must not see it change.
   if (isPlainObject(data)) data = { ...data };
+  if (blank) {
+    session = { values: blankValues(), reaction: calmReaction() };
+    scripts = false;
+  }
 
   const selected = selectSkin(env);
-  const draw = (skin) => renderSkin({ selected: skin, data, env, now, warningStore, scripts, runScripts, session }) ?? [`gamebar: skin ${skin.name} cannot be drawn`];
+  const draw = (skin) => renderSkin({ selected: skin, data, env, now, warningStore, scripts, runScripts, session, blank }) ?? [`gamebar: skin ${skin.name} cannot be drawn`];
   try {
     return draw(selected);
   } catch (err) {
@@ -114,7 +125,7 @@ function styleOf(game) {
 // The selected skin, fitted, its scripts run and drawn, or null when nothing of it (nor of the
 // default skin) can be drawn. A node whose asset is missing draws its default, and the warning line
 // names the missing package (src/platform/assets.js).
-function renderSkin({ selected, data, env, now, warningStore, scripts, runScripts, session = null }) {
+function renderSkin({ selected, data, env, now, warningStore, scripts, runScripts, session = null, blank = false }) {
   const warnings = [...selected.warnings];
   let skin = selected;
   let entry = entryOf(skin);
@@ -155,7 +166,7 @@ function renderSkin({ selected, data, env, now, warningStore, scripts, runScript
   // missing package starts installing before a narrower terminal needs it.
   const assets = createAssetResolver({ env, now: now * 1000, folder });
   for (const g of entryGames(entry)) assets.need(g);
-  const ctx = { tick, step, resolveAsset: assets.resolve, reportAsset: assets.report, reaction, now };
+  const ctx = { tick, step, resolveAsset: assets.resolve, reportAsset: assets.report, reaction, now, blank };
   let outputs = {};
   if (scripts !== false) {
     const run = runScripts(fit, {
@@ -166,6 +177,7 @@ function renderSkin({ selected, data, env, now, warningStore, scripts, runScript
     warnings.push(...run.warnings);
   }
   const lines = drawFit(fit, { values, width, ctx, scripts: outputs, lines: style.lines });
+  if (blank) return lines;
   warnings.push(...assets.warnings());
   recordUsage(selected.name, assets.packages(), { env, now: now * 1000 });
   const line = warningLine(warnings, { store: warningStore, now, width });

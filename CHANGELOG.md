@@ -51,6 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without blocking, and it ends itself after 20 s whatever a child process does; a healthy one
   still takes about 1 s.
 
+### Changed
+
+- **A new session shows its bar empty instead of `gamebar: offline`** (#35). For its first second,
+  before the render daemon has drawn it, a session printed the offline line although the daemon
+  was running. It now shows the skin drawn empty and grey: every number at zero, texts empty, the
+  mugshot's default face and a silent chat, so the bar takes its shape at once. The daemon keeps
+  this blank frame drawn for the session it saw last; when no daemon runs, the offline line stays.
+
 ## [3.0.0] - 2026-11-23
 
 The skin engine is new, and the skin format with it: a breaking change for skins of your own.

@@ -53,9 +53,9 @@ const SHARED_STATE = new Set(PREFIXES.flatMap((p) => [
 const ACCOUNT_STATE = new RegExp(`^${FILE_PREFIX}(?:ratehealth|ratelimits)_[0-9a-f]{12}\\.json(?:\\.\\d+\\.tmp)?$`);
 
 // The render daemon's own files (daemonPaths in src/platform/runtime.js): one heartbeat and one
-// claim per install hash, shared by every session the daemon serves.
+// claim per install hash, shared by every session the daemon serves, and the blank frame.
 const HASH_RE = `[0-9a-f]{${ROOT_HASH_LEN}}`;
-const DAEMON_FILE = new RegExp(`^${P}daemon_${HASH_RE}\\.(?:json|claim)(?:\\.\\d+\\.tmp)?$`);
+const DAEMON_FILE = new RegExp(`^${P}daemon_${HASH_RE}\\.(?:json|claim|start)(?:\\.\\d+\\.tmp)?$`);
 // Per-session payload and frame (sessionPaths in src/platform/runtime.js), with any install hash.
 const DAEMON_SESSION_FILE = new RegExp(`^${P}(?:payload|frame)_${HASH_RE}_(.+)\\.json(?:\\.\\d+\\.tmp)?$`);
 const PROBE_FILE = new RegExp(`^${P}(?:git|msys|adv)_(.+)\\.json$`);

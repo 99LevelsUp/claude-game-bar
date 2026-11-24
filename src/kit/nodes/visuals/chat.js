@@ -220,7 +220,8 @@ export const chatKind = define({
     const F = metricFacts(values);
     const libraries = script && Array.isArray(script.conversations) ? script.conversations : [];
     const now = typeof ctx.now === "number" ? ctx.now : 0;
-    const { messages } = playChat({ facts: F, libraries, params: p, now, rows: height });
+    // A blank bar (ctx.blank, the frame shown before a session's first) has no facts to talk about.
+    const { messages } = ctx.blank ? { messages: [] } : playChat({ facts: F, libraries, params: p, now, rows: height });
     const strip = r.p.background && r.p.background !== "none" ? surface : STRIP;
     return paintChat(messages, { width, height, params: p, level: F.effort, now, surface, strip, textRgb: paintRgb(r.color) || [255, 255, 255] });
   },

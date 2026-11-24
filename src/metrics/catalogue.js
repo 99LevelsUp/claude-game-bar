@@ -94,3 +94,20 @@ export const CATALOGUE = {
   "save.leanctx.share": m("Share of tokens saved by lean-ctx", "percent"),
   "save.lingua.share": m("Share of tokens saved by LLMLingua", "percent"),
 };
+
+// Each type's empty value: what a blank bar shows before a session's first frame (#35). Numbers
+// are zero, texts and lists empty. A time of day, an enum and a conversation have no empty value
+// that would not read as real, so they stay absent.
+const EMPTY = {
+  percent: 0, count: 0, money: 0, duration: 0, ratio: [0, 0], label: "", name: "",
+  flags: [], counts: [], items: [], series: [], channels: [],
+};
+
+// Every catalogued metric at its type's empty value, where the type has one.
+export function blankValues() {
+  const out = {};
+  for (const [key, { type }] of Object.entries(CATALOGUE)) {
+    if (Object.hasOwn(EMPTY, type)) out[key] = structuredClone(EMPTY[type]);
+  }
+  return out;
+}
