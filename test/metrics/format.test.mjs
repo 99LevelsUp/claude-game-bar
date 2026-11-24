@@ -19,7 +19,12 @@ is("money", 1.83, "$1.83"); is("money", 12.34, "$12.34"); is("money", 123.4, "$1
 is("money", 12345, "$12k"); is("money", 12.34, "$12", true); is("money", 1500, "$2k", true);
 is("duration", 59, "59s"); is("duration", 12 * 60, "12m"); is("duration", 4 * 3600 + 5 * 60, "4h05m");
 is("duration", 23 * 3600 + 59 * 60, "23h"); is("duration", 6 * 86400 + 23 * 3600, "6d23h"); is("duration", 12 * 86400, "12d");
-is("duration", 4 * 3600 + 59 * 60, "4h", true); is("duration", 6 * 86400 + 23 * 3600, "6d", true);
+// Compact rounds to the nearest of its one unit (#130): a reset 1 h 49 min away is 2h, not 1h.
+is("duration", 4 * 3600 + 59 * 60, "5h", true); is("duration", 6 * 86400 + 23 * 3600, "7d", true);
+is("duration", 3600 + 49 * 60, "2h", true); is("duration", 3600 + 29 * 60, "1h", true); is("duration", 3600 + 30 * 60, "2h", true);
+is("duration", 59, "59s", true); is("duration", 89, "1m", true); is("duration", 90, "2m", true);
+is("duration", 59 * 60 + 40, "1h", true); is("duration", 23 * 3600 + 40 * 60, "1d", true); is("duration", 3 * 86400 + 4 * 3600, "3d", true);
+is("duration", 3 * 86400 + 14 * 3600, "4d", true); is("duration", 500 * 86400, "99d", true);
 is("time", 51780, "14:23"); is("time", 0, "00:00"); is("time", 86399, "23:59");
 is("ratio", [2, 5], "2/5"); is("ratio", [3, 12], "3/12"); is("ratio", [120, 140], "120"); is("ratio", [12, 34], "12", true);
 

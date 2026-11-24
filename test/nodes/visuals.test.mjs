@@ -47,7 +47,7 @@ ok(leaf(`kind = "number"\nmetric = "loc.added"\nprefix = "+"`, { "loc.added": 12
 console.log("text:");
 w = widths(`kind = "text"\nmetric = "usage.reset5h"`, { "usage.reset5h": 4 * 3600 + 59 * 60 });
 ok(w.nat === 5 && w.min === 3, `a duration with no width measures 5 and 3 (${w.nat}/${w.min})`);
-ok(leaf(`kind = "text"\nmetric = "usage.reset5h"`, { "usage.reset5h": 4 * 3600 + 59 * 60 }, 3).text[0] === "4h ", "a duration in its compact form");
+ok(leaf(`kind = "text"\nmetric = "usage.reset5h"`, { "usage.reset5h": 4 * 3600 + 59 * 60 }, 3).text[0] === "5h ", "a duration in its compact form, rounded (#130)");
 ok(leaf(`kind = "text"\nmetric = "usage.reset5h"`, { "usage.reset5h": "2h13m" }, 5).text[0] === "2h13m", "a preformatted value is drawn as it is");
 w = widths(`kind = "text"\nmetric = "model.name"\nicon = "🤖"\nwidth = 12\nmin_width = 6`, { "model.name": "Opus 4.8" });
 ok(w.nat === 12 && w.min === 6, `width and min_width set a name's size (${w.nat}/${w.min})`);
