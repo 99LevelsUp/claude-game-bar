@@ -149,6 +149,9 @@ the other. The hook also:
 
 When two installations are wired (a global install and a checkout with `install --local`), the
 hooks of the installation that does not draw the session step aside, so each event is counted once.
+The git snapshot, the bash count and the daemon supervision run only for a session whose client
+has written its payload: a headless run (`claude -p`) fires the hooks like any session but never
+draws a bar, so it only gets its journal lines.
 
 ## Skins and nodes
 

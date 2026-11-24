@@ -23,7 +23,7 @@ import { appendFileSync, writeFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { statePaths, ensureRuntimeDir, servedElsewhere } from "./platform/runtime.js";
-import { superviseDaemon } from "./platform/supervise.js";
+import { superviseDaemon, drawnHere } from "./platform/supervise.js";
 import { sweepState, endSession } from "./platform/sweep.js";
 import { bashCount, reapStaleShells, runReaper, REAP_MIN } from "./platform/reap.js";
 import { gitSnapshot, gitMarkerPath, msysMarkerPath, shouldSnapshotGit, shouldSnapshotMsys } from "./platform/snapshots.js";
@@ -87,9 +87,15 @@ async function main() {
       appendFileSync(journal, JSON.stringify({ name, ev: slim(ev), ts: now }) + "\n", { flag: "a" });
     } catch { /* never block a tool */ }
 
+    // The probes below (git, the bash count) feed only the bar, so they run only for a session
+    // this installation draws (#39). A headless `claude -p` run fires the hooks like any session
+    // but never shows a bar, and used to pay 4 to 7 process spawns for nothing. At SessionStart
+    // this waits for the client's first tick, so the branch still shows from the start.
+    const drawn = await drawnHere(name, sid);
+
     // Git snapshot on write-affecting events / per-turn Stop / session start, throttled.
     const cwd = ev.cwd || (ev.workspace || {}).current_dir;
-    if (cwd && shouldSnapshotGit(name, ev, nowMs, sid)) {
+    if (drawn && cwd && shouldSnapshotGit(name, ev, nowMs, sid)) {
       const snap = gitSnapshot(cwd);
       try {
         appendFileSync(journal, JSON.stringify({ name: "git", ev: { git: snap }, ts: now }) + "\n", { flag: "a" });
@@ -101,7 +107,7 @@ async function main() {
     // event (never a render tick). win32 only; null elsewhere -> no line, so the field stays hidden.
     // Once a pile is actually forming, reap the hung statusLine wrappers that caused it, then
     // re-read the count so the HUD shows the state we leave behind, not the one we found.
-    if (shouldSnapshotMsys(name, nowMs, sid)) {
+    if (drawn && shouldSnapshotMsys(name, nowMs, sid)) {
       let n = bashCount();
       let reaped = 0;
       if (n !== null && n >= REAP_MIN) {
@@ -121,7 +127,7 @@ async function main() {
     }
 
     // Last, after the synchronous work, so the pipe probe's short timeout is never eaten by it.
-    await superviseDaemon(name, sid);
+    await superviseDaemon(name, sid, drawn);
   } catch { /* swallow everything: a hook must never block a tool */ }
   process.exit(0);
 }

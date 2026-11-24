@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { loadState } from "../../src/metrics/tasks.js";
 import { activityValues } from "../../src/metrics/activity.js";
 import { stalePids, parseBashShells, reapStaleShellsAsync, runReaper, REAPER_LIFE_MS } from "../../src/platform/reap.js";
-import { sandboxEnv } from "../_sandbox-env.mjs";
+import { sandboxEnv, markDrawn } from "../_sandbox-env.mjs";
 
 // Pin the DOOM theme so a theme saved on this machine (`theme minecraft`) can't change
 // what the statusline renders under test. Child processes inherit it via process.env.
@@ -56,6 +56,7 @@ try {
   // The reaper's selection rule is covered purely below instead.
   // sandboxEnv keeps the hook's runtime and temp files out of the real ones.
   const env = { ...process.env, ...sandboxEnv(tmp), GAMEBAR_STATE: checkpoint, GAMEBAR_GIT_TTL: "0", GAMEBAR_MSYS_REAP: "0" };
+  markDrawn(sid2, tmp); // the probes run only for a session the bar draws (#39)
   execFileSync(process.execPath, [HOOK], {
     input: JSON.stringify({ hook_event_name: "SessionStart", session_id: sid2, cwd: tmp }),
     encoding: "utf8", env,
@@ -79,6 +80,7 @@ try {
   const journal2 = checkpoint2 + ".jsonl";
   const sid3 = "msysrw-" + process.pid;
   const env0 = { ...process.env, ...sandboxEnv(tmp), GAMEBAR_STATE: checkpoint2, GAMEBAR_MSYS_TTL: "0", GAMEBAR_MSYS_REAP: "0" };
+  markDrawn(sid3, tmp);
   execFileSync(process.execPath, [HOOK], {
     input: JSON.stringify({ hook_event_name: "PostToolUse", session_id: sid3, tool_name: "PowerShell", cwd: tmp }),
     encoding: "utf8", env: env0,
@@ -90,6 +92,17 @@ try {
   } else {
     ok(!rwMsys, "non-win32: still no msys line on a non-write event");
   }
+
+  // A headless session (`claude -p`): the hooks fire, but no client has written its payload, so
+  // the bash count is never taken (#39).
+  const checkpoint3 = path.join(tmp, "state-headless.json");
+  execFileSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ hook_event_name: "PostToolUse", session_id: "msysheadless-" + process.pid, tool_name: "PowerShell", cwd: tmp }),
+    encoding: "utf8", env: { ...env0, GAMEBAR_STATE: checkpoint3 },
+  });
+  const hlLines = readFileSync(checkpoint3 + ".jsonl", "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  ok(hlLines.length === 1 && !hlLines.some((l) => l.name === "msys") && !existsSync(path.join(tmp, `gamebar_msys_msysheadless-${process.pid}.json`)),
+    `a session the bar does not draw gets its event line but no bash count (lines: ${hlLines.map((l) => l.name).join(", ")})`);
   // --- Reaper selection: pure and cross-platform, so it is tested everywhere. ------------
   // The reaper is the only thing in this package that kills a process, so its selection rule
   // has to be provably narrow: OUR statusline wrapper, and only once it has outlived a healthy
