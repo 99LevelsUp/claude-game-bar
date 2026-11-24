@@ -254,6 +254,9 @@ export function daemonPaths(hash = ROOT_HASH, env = process.env) {
   return {
     heartbeat: path.join(dir, `${daemonPrefix(hash)}json`),
     claim: path.join(dir, `${daemonPrefix(hash)}claim`), // restart throttle
+    // The blank frame: the skin drawn empty and grey, which the client prints for a session the
+    // daemon has not drawn yet (#35). A frame file like a session's (src/platform/frame.js).
+    start: path.join(dir, `${daemonPrefix(hash)}start`),
   };
 }
 

@@ -75,9 +75,12 @@ Claude Code runs the `statusLine` command about once a second and pipes the sess
 
 1. **The client** (`src/gamebar-client.sh`) uses bash builtins only and starts no process. It
    writes the session's payload for the daemon and prints the frame the daemon last rendered for
-   this session, greyed with `OFFLINE` when the frame is past its deadline.
+   this session, greyed with `OFFLINE` when the frame is past its deadline. A session the daemon
+   has not drawn yet gets the daemon's **blank frame** instead: the skin drawn empty and grey.
 2. **The daemon** (`src/daemon.js`) renders every active session of its installation, renews each
-   frame's deadline about twice a second, runs at below-normal priority and exits after
+   frame's deadline about twice a second, keeps the blank frame (`gamebar_daemon_<hash>.start`)
+   drawn for the session it saw last (every metric at its type's empty value, no scripts, a silent
+   chat: `blank` in `src/render-core.js`), runs at below-normal priority and exits after
    `GAMEBAR_DAEMON_IDLE_MS` with no active session, or when its own source files change; in that
    case, while a session still uses the bar, it starts its successor from the new source itself.
 3. **The render** (`src/render-core.js`, with scripts through `src/render.js`):

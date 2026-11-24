@@ -24,6 +24,8 @@
 # Files, in the bar's runtime directory (the rule of runtimeDir in src/platform/runtime.js, in builtins):
 #   gamebar_payload_<hash>_<key>.json   written here, read by the daemon
 #   gamebar_frame_<hash>_<key>.json     written by the daemon, read here
+#   gamebar_daemon_<hash>.start         the daemon's blank frame: the skin drawn empty and grey,
+#                                       read here instead of a session frame that does not exist yet
 # <hash> comes from the statusLine command (the client never computes it). <key> is the session
 # id made file-safe exactly like sidKey in src/platform/runtime.js. On Linux and macOS the client only uses
 # a runtime directory that is a real directory owned by this user (the hooks create it with mode
@@ -44,8 +46,10 @@
 #           Read it by splitting the line on TAB and each item at its first "=".
 #   rest    the stdin JSON exactly as received (bash cannot carry NUL bytes; there are none).
 #
-# Frame file layout and the choice rules: see src/platform/frame.js. A frame that is missing, unreadable,
-# malformed or of a contract version other than 1 prints the built-in offline line.
+# Frame file layout and the choice rules: see src/platform/frame.js. A session frame that is missing
+# is replaced by the blank frame, which greys like any frame once the daemon stops renewing it. A
+# frame (or a blank frame) that is missing, unreadable, malformed or of a contract version other
+# than 1 prints the built-in offline line.
 
 exec 2>/dev/null
 
@@ -193,8 +197,10 @@ __gamebar_client() {
 
   # read -N fills the variable and returns non-zero at end of file, so only the variable counts.
   # A read that comes back empty (the daemon was replacing the file) is tried once more.
+  # A session the daemon has not drawn yet has no frame: the daemon's blank frame stands in for it.
   local f= now=${EPOCHREALTIME//[!0-9]/}
   local -a pick=()
+  [[ -e $frame ]] || frame=$dir/gamebar_daemon_$hash.start
   IFS= read -r -N 1000000 f < "$frame"
   [[ -n $f ]] || IFS= read -r -N 1000000 f < "$frame"
   if __gamebar_pick; then

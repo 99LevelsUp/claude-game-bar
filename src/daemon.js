@@ -24,7 +24,8 @@ import { renderSession } from "./render.js";
 import { createScriptPass, CALL_BUDGET_MS, PASS_BUDGET_MS } from "./kit/skin/scripts.js";
 import { createScriptHost } from "./platform/scripts/host.js";
 import { isPlainObject } from "./kit/is.js";
-import { writeFrame } from "./platform/frame.js";
+import { writeFrame, greyBody } from "./platform/frame.js";
+import { renderSessionWith } from "./render-core.js";
 import { PACKAGE_ROOT, SRC_DIR } from "./package-root.js";
 import {
   rootHash, daemonPaths, payloadPrefix, framePrefix, writeAtomic, pipePath, envNum, packageVersion,
@@ -37,6 +38,7 @@ export { pipePath };
 const DEFAULT_WINDOW_S = 3;
 const DEFAULT_IDLE_MS = 600000;
 const TICK_MS = 500;
+const BLANK_REDRAW_MS = 60000; // the blank frame is drawn again at least this often
 const JITTER_MS = 50;
 const SRC_CHECK_MS = 2000;
 
@@ -124,7 +126,7 @@ export function maybeStartReaper(state, { now = Date.now(), env = process.env, p
 
 // Returns { idle, rendered }: idle is true once no session has been active for the idle period.
 export function runPass(state, { dir = runtimeDir(), hash = rootHash(), now = Date.now(),
-  heartbeat = inDir(dir, daemonPaths(hash).heartbeat) } = {}) {
+  heartbeat = inDir(dir, daemonPaths(hash).heartbeat), start = inDir(dir, daemonPaths(hash).start) } = {}) {
   const prefix = payloadPrefix(hash);
   const name = /^([A-Za-z0-9_-]{1,48})\.json$/;
   let names = [];
@@ -179,6 +181,28 @@ export function runPass(state, { dir = runtimeDir(), hash = rootHash(), now = Da
     const deadline = nowUs + Math.round(s.window * 1e6);
     if (writeFrame(s.frame, { daemon: state.version, deadline, slots: [{ start: nowUs, lines }] })) rendered += 1;
     else state.renameFailures += 1;
+  }
+
+  // The blank frame (#35): the skin of the session seen last, drawn empty and grey, for a session
+  // whose own frame does not exist yet. Before it, the first tick of a new session printed the
+  // offline line although the daemon was running. It is drawn again only when that session's
+  // settings change or after BLANK_REDRAW_MS (a skin edited meanwhile); every pass renews its
+  // deadline, so once the daemon stops it greys and is marked OFFLINE like any frame.
+  let latest = null;
+  for (const s of state.sessions.values()) {
+    if (now - s.seenAt < state.idleMs && (!latest || s.seenAt > latest.seenAt)) latest = s;
+  }
+  if (latest) {
+    const sig = JSON.stringify(latest.env);
+    if (!state.blank || state.blank.sig !== sig || now - state.blank.at >= BLANK_REDRAW_MS) {
+      try {
+        state.blank = { sig, at: now, lines: greyBody(renderSessionWith(null, { env: latest.env, now: now / 1000, blank: true })) };
+      } catch { state.blank = null; }
+    }
+    if (state.blank) {
+      const deadline = nowUs + Math.round(latest.window * 1e6);
+      if (!writeFrame(start, { daemon: state.version, deadline, slots: [{ start: nowUs, lines: state.blank.lines }] })) state.renameFailures += 1;
+    }
   }
 
   const beat = { pid: state.pid, start: state.start, version: state.version, window: window || DEFAULT_WINDOW_S,

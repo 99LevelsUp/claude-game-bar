@@ -8,12 +8,12 @@
 // Frames are built with the node-side reference serializer, so client and daemon agree on the format.
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, symlinkSync, unlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serializeFrame, greyLines } from "../../src/platform/frame.js";
-import { sidKey, sessionPaths, runtimeDir } from "../../src/platform/runtime.js";
+import { sidKey, sessionPaths, runtimeDir, daemonPaths } from "../../src/platform/runtime.js";
 import { sandboxEnv } from "../_sandbox-env.mjs";
 
 const HERE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -210,6 +210,27 @@ try {
     ok(sline === "gamebar-env\tGAMEBAR_EVENTS=/e/events.jsonl\tDOOMBAR_LLMLINGUA=/l/ling.json\tGAMEBAR_SAVINGS_STATE=/s/sav.json",
       `the savings settings are forwarded when set (got ${show(sline)})`);
     ok(r.out === OFFLINE, "with no frame yet the payload is still written and the offline line printed");
+  }
+
+  // --- A session with no frame yet prints the daemon's blank frame (#35) -------------------
+  {
+    const start = path.join(sandbox, path.basename(daemonPaths(HASH).start));
+    const now = nowMicros();
+    const blank = (deadline, lines) => serializeFrame({ daemon: "3.0.1", deadline, slots: [{ start: now - 1e6, lines }] });
+    writeFileSync(start, blank(now + 60e6, ["blank 1", "blank 2"]));
+    const r = run({ sid: "first-tick" });
+    ok(r.out === "blank 1\nblank 2\n", `a session with no frame yet prints the blank frame (got ${show(r.out)})`);
+    ok(existsSync(inSandbox("first-tick", "payload")), "and still hands its payload over");
+    putFrame("own-frame", serializeFrame({ daemon: "3.0.1", deadline: now + 60e6, slots: [{ start: now, lines: ["own"] }] }));
+    ok(run({ sid: "own-frame" }).out === "own\n", "a session's own frame wins over the blank frame");
+    putFrame("own-broken", "garbage\n");
+    ok(run({ sid: "own-broken" }).out === OFFLINE, "a session frame that exists but is broken still prints the offline line");
+    writeFileSync(start, blank(now - 1e6, ["blank"]));
+    const g = run({ sid: "first-tick-stale" });
+    ok(g.out === text(greyLines(["blank"])), `a blank frame past its deadline prints its grey OFFLINE copy (got ${show(g.out)})`);
+    writeFileSync(start, "garbage\n");
+    ok(run({ sid: "first-tick-bad" }).out === OFFLINE, "an unusable blank frame prints the offline line");
+    unlinkSync(start);
   }
 
   // --- GAMEBAR_STATE does not move the daemon files ----------------------------------------
