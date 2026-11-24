@@ -173,6 +173,23 @@ try {
     runPass(state, { dir: TMPDIR, hash: HASH, now: later + 500 });
     const h = parseFrame(readFileSync(startFile, "utf8"));
     ok(h && h.deadline === g.deadline, "with no session left it is not renewed, so it greys on its deadline");
+
+    // Two sessions in terminals of different widths take turns being the last one seen: each one's
+    // blank frame is drawn once, not on every pass.
+    const x = session("blank-x", { env: { COLUMNS: "200" } });
+    const y = session("blank-y", { env: { COLUMNS: "90" } });
+    const draws0 = state.blankDraws;
+    const widths = new Set();
+    for (let i = 0; i < 8; i++) {
+      (i % 2 ? x : y).write();
+      runPass(state, { dir: TMPDIR, hash: HASH, now: later + 1000 + i * 500 });
+      const k = parseFrame(readFileSync(startFile, "utf8"));
+      widths.add(Math.max(...k.slots[0].lines.map((l) => strip(l).length)));
+    }
+    ok(state.blankDraws - draws0 === 2 && widths.size === 2,
+      `alternating sessions each get their own blank frame, drawn once (${state.blankDraws - draws0} draws, ${widths.size} widths)`);
+    unlinkSync(payloadFile("blank-x"));
+    unlinkSync(payloadFile("blank-y"));
     unlinkSync(startFile);
   }
 
