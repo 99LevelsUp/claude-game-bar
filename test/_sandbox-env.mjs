@@ -10,7 +10,7 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { sessionPaths } from "../src/platform/runtime.js";
+import { sessionPaths, daemonPaths } from "../src/platform/runtime.js";
 
 const NPM_STUB = path.join(path.dirname(fileURLToPath(import.meta.url)), "_npm-stub.mjs");
 
@@ -20,5 +20,11 @@ export const sandboxEnv = (dir) => ({ TEMP: dir, TMP: dir, TMPDIR: dir, GAMEBAR_
 
 // Marks a session as one this checkout's client draws: its payload file in the sandbox's runtime
 // directory. The hooks probe git and the bash count, and supervise the daemon, only for such a
-// session (#39); a headless run has none.
-export const markDrawn = (sid, dir) => writeFileSync(sessionPaths(sid, undefined, sandboxEnv(dir)).payload, "gamebar-env\n{}");
+// session (#39); a headless run has none. A start of the daemon is also claimed as just made, so a
+// hook run within the throttle window (15 s) starts none: a daemon left running would keep the
+// test directory busy (Windows cannot delete it) and write its frames there.
+export const markDrawn = (sid, dir) => {
+  const env = sandboxEnv(dir);
+  writeFileSync(sessionPaths(sid, undefined, env).payload, "gamebar-env\n{}");
+  writeFileSync(daemonPaths(undefined, env).claim, JSON.stringify({ claimedAt: Date.now() }));
+};
