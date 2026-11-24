@@ -10,7 +10,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync, existsSync 
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { sandboxEnv } from "../_sandbox-env.mjs";
+import { sandboxEnv, markDrawn } from "../_sandbox-env.mjs";
 
 const HERE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOOK = path.join(HERE, "..", "src", "hook.js");
@@ -35,6 +35,7 @@ const ours = (dir) => readdirSync(dir).filter((n) => /^(gamebar_|savings_)/.test
 
 try {
   // --- Hook: SessionStart writes the git and msys probe markers ------------------------------
+  markDrawn(sid, elsewhere); // the probes run only for a session the bar draws (#39)
   execFileSync(process.execPath, [HOOK], {
     input: JSON.stringify({ hook_event_name: "SessionStart", session_id: sid, cwd: sandbox }),
     encoding: "utf8", env,
@@ -96,7 +97,8 @@ try {
   }
 
   // --- Nothing per-session reached the system temp dir --------------------------------------
-  const leaked = ours(elsewhere).filter((n) => /_(filestest)/.test(n));
+  // The payload is the client's, in the runtime directory by design (marked drawn above).
+  const leaked = ours(elsewhere).filter((n) => /_(filestest)/.test(n) && !n.startsWith("gamebar_payload_"));
   ok(leaked.length === 0, `no per-session file in the system temp dir (found: ${leaked.join(", ") || "none"})`);
 } finally {
   rmSync(sandbox, { recursive: true, force: true });

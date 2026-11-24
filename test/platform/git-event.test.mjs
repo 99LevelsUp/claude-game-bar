@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadState } from "../../src/metrics/tasks.js";
 import { buildValues } from "../../src/metrics/session.js";
-import { sandboxEnv } from "../_sandbox-env.mjs";
+import { sandboxEnv, markDrawn } from "../_sandbox-env.mjs";
 
 // Pin the DOOM theme so a theme saved on this machine (`theme minecraft`) can't change
 // what the statusline renders under test. Child processes inherit it via process.env.
@@ -50,7 +50,18 @@ try {
   git("branch", "-M", "doomtest");              // portable rename to a known branch name
   writeFileSync(path.join(repo, "b.txt"), "dirty"); // one untracked file -> status count 1
 
+  // A headless session (`claude -p`): the hooks fire, but no client has written its payload, so
+  // git is never probed (#39).
+  const headless = path.join(tmp, "headless.json");
+  execFileSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ hook_event_name: "PostToolUse", session_id: "headless-" + process.pid, tool_name: "Bash", cwd: repo }),
+    encoding: "utf8", env: { ...env, GAMEBAR_STATE: headless },
+  });
+  const hl = readFileSync(headless + ".jsonl", "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  ok(hl.length === 1 && hl[0].name === "PostToolUse", `a session the bar does not draw gets its event line but no git probe (${hl.map((l) => l.name).join(", ")})`);
+
   // A write-affecting PostToolUse (Bash) in the repo -> hook snapshots git into the journal.
+  markDrawn(sid, tmp); // the session's client has drawn it
   execFileSync(process.execPath, [HOOK], {
     input: JSON.stringify({ hook_event_name: "PostToolUse", session_id: sid, tool_name: "Bash", cwd: repo }),
     encoding: "utf8", env,

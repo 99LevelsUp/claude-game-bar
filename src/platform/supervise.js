@@ -248,15 +248,22 @@ export async function waitForFile(file, waitMs, pollMs = PAYLOAD_POLL_MS) {
   return true;
 }
 
-export async function superviseDaemon(name, sid) {
+// Resolves true when this installation's client draws the session: it has written the session's
+// payload. SessionStart usually comes before the client's first tick, so it waits for the payload
+// (the hook is installed async; nothing waits on it); any other event only looks. A headless run
+// (`claude -p`) fires the hooks like any session but never draws, so it never has one.
+export function drawnHere(name, sid) {
+  const waitMs = name === "SessionStart" ? PAYLOAD_WAIT_MS : 0;
+  return waitForFile(sessionPaths(sid, rootHash(PACKAGE_ROOT)).payload, waitMs);
+}
+
+// `drawn`: what drawnHere resolved to, when the caller already asked.
+export async function superviseDaemon(name, sid, drawn) {
   if (!DAEMON_EVENTS.has(name)) return;
   const hash = rootHash(PACKAGE_ROOT);
-  // Only where this installation's client is in use: it has written this session's payload.
-  // SessionStart usually comes before the client's first tick, so it waits for the payload
-  // (the hook is installed async; nothing waits on it). Without that wait, a session that finds
-  // no daemon running shows the offline line until its first tool call or Stop.
-  const waitMs = name === "SessionStart" ? PAYLOAD_WAIT_MS : 0;
-  if (!(await waitForFile(sessionPaths(sid, hash).payload, waitMs))) return;
+  // Only where this installation's client is in use. Without the wait at SessionStart, a session
+  // that finds no daemon running shows the offline line until its first tool call or Stop.
+  if (!(drawn ?? (await drawnHere(name, sid)))) return;
   const paths = daemonPaths(hash), pipe = daemonSocket(hash);
   if (!(await probePipe(pipe))) {
     if (claimRestart(paths.claim, Date.now())) spawnDaemon();

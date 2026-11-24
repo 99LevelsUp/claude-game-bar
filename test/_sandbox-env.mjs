@@ -7,11 +7,24 @@
 // (test/_npm-stub.mjs) whose global folder is an empty place in the test directory, so `install`
 // never reaches the real npm. Claude Code's config directory is the test directory too, so the bar
 // finds no logged-in account (src/platform/account.js) and pools rate limits in the shared file.
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { sessionPaths, daemonPaths } from "../src/platform/runtime.js";
 
 const NPM_STUB = path.join(path.dirname(fileURLToPath(import.meta.url)), "_npm-stub.mjs");
 
 export const sandboxEnv = (dir) => ({ TEMP: dir, TMP: dir, TMPDIR: dir, GAMEBAR_RUNTIME_DIR: dir, DOOMBAR_RUNTIME_DIR: dir,
   GAMEBAR_USER_DIR: path.join(dir, "user"), DOOMBAR_USER_DIR: path.join(dir, "user"),
   GAMEBAR_NPM: NPM_STUB, NPM_STUB_ROOT: path.join(dir, "npm-global"), CLAUDE_CONFIG_DIR: dir });
+
+// Marks a session as one this checkout's client draws: its payload file in the sandbox's runtime
+// directory. The hooks probe git and the bash count, and supervise the daemon, only for such a
+// session (#39); a headless run has none. A start of the daemon is also claimed as just made, so a
+// hook run within the throttle window (15 s) starts none: a daemon left running would keep the
+// test directory busy (Windows cannot delete it) and write its frames there.
+export const markDrawn = (sid, dir) => {
+  const env = sandboxEnv(dir);
+  writeFileSync(sessionPaths(sid, undefined, env).payload, "gamebar-env\n{}");
+  writeFileSync(daemonPaths(undefined, env).claim, JSON.stringify({ claimedAt: Date.now() }));
+};

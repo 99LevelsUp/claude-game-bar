@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was running. It now shows the skin drawn empty and grey: every number at zero, texts empty, the
   mugshot's default face and a silent chat, so the bar takes its shape at once. The daemon keeps
   this blank frame drawn for the session it saw last; when no daemon runs, the offline line stays.
+- **Headless runs no longer pay for the bar's probes** (#39). A `claude -p` run (started by other
+  tools' hooks and scripts) fires the hooks like any session but never draws a bar, and each one
+  still started `git` up to three times and `tasklist` once. The hooks now probe git and count
+  the Git Bash shells only for a session whose status line has drawn, which a headless run never
+  does; it gets its journal lines and nothing else. At a session's start the hook waits for the
+  first draw as before, so the branch still shows from the start.
 
 ### Added
 
