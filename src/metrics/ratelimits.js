@@ -91,8 +91,10 @@ export function rateHealthValue(data, env = process.env) {
   const rl = data.rate_limits || {};
   // Throw-proof extraction: this runs on the render hot path and main() has no top-level catch,
   // so a malformed payload (e.g. a non-object window) must never blank the HUD. Numbers only.
-  const num = (o, k) => (o && typeof o === "object" && typeof o[k] === "number") ? o[k] : null;
-  const cur = { p5: num(rl.five_hour, "used_percentage"), p7: num(rl.seven_day, "used_percentage") };
+  // The accumulator is the account's, shared like the pool: a reading that cannot be real stays
+  // out of it too (#124), also when sharing is off (GAMEBAR_RATELIMITS_SHARE=0).
+  const pct = (k) => { const w = plausibleReading(k, rl[k]); return w ? w.used_percentage : null; };
+  const cur = { p5: pct("five_hour"), p7: pct("seven_day") };
   if (cur.p5 == null && cur.p7 == null) return null; // no rate limits -> context fallback
   // Rate limits (and therefore the cap ratio k) are ACCOUNT-wide, not per-session: every session
   // samples the same used_percentage. A per-session accumulator made each session re-learn k from
@@ -112,6 +114,11 @@ export function rateHealthValue(data, env = process.env) {
   try { prev = JSON.parse(raw); } catch { /* no accumulator yet, or one that cannot be read now */ }
   if (prev !== null && (typeof prev !== "object" || Array.isArray(prev))) prev = null;
   const { headroom, state } = rateHeadroom(prev, cur);
+  // A window whose reading was dropped keeps the last real one, so the next real reading's climb
+  // is still counted.
+  for (const [p, k] of [["p5", "five_hour"], ["p7", "seven_day"]]) {
+    if (cur[p] == null && isReading(rl[k]) && prev && typeof prev[p] === "number") state[p] = prev[p];
+  }
   // Every session of the account (and a second installation's daemon) reads and writes this file.
   // A write is atomic, so no reader sees half of one; and a file that is there but cannot be read or
   // parsed right now is left alone, since writing over it would restart the learned sums from
@@ -165,6 +172,34 @@ export function fresherWindow(a, b, now = Date.now() / 1000) {
 const WINDOWS = ["five_hour", "seven_day"];
 const SESSION_KEEP_S = 8 * 86400; // a session not seen for longer is forgotten by the pool
 const isReading = (w) => w && typeof w === "object" && typeof w.used_percentage === "number";
+
+// A reading that cannot be real never enters the pool, and one already in it is dropped (#124):
+// the pool lets the reading that changed last win, so one made-up reading (a scratch render with a
+// resets_at in the year 2255) overrode every real session's and showed `999d` on every bar of the
+// account. A window resets at most its own length from now (plus a margin for clock skew), and a
+// percentage is a finite number not below 0. Above 100 is kept as 100, not dropped: it can only
+// mean the limit is reached, and dropping it would hide exactly that (the dead mugshot). A reading
+// whose window has already reset is real, only old; fresherWindow handles it.
+const WINDOW_S = { five_hour: 5 * 3600, seven_day: 7 * 86400 };
+const AHEAD_MARGIN_S = 3600;
+export function plausibleReading(k, w, now = Date.now() / 1000) {
+  if (!isReading(w) || !Number.isFinite(w.used_percentage) || w.used_percentage < 0) return null;
+  const r = w.resets_at;
+  if (r != null && (typeof r !== "number" || !Number.isFinite(r) || r > now + WINDOW_S[k] + AHEAD_MARGIN_S)) return null;
+  return w.used_percentage > 100 ? { ...w, used_percentage: 100 } : w;
+}
+
+// Pure: `rl` (a rate_limits object, or null) with each window that cannot be real removed.
+export function plausibleRateLimits(rl, now = Date.now() / 1000) {
+  if (!rl || typeof rl !== "object") return rl;
+  const out = { ...rl };
+  for (const k of WINDOWS) {
+    if (!(k in out)) continue;
+    const w = plausibleReading(k, out[k], now);
+    if (w) out[k] = w; else delete out[k];
+  }
+  return out;
+}
 const sessionKey = (sid) => createHash("sha256").update(String(sid)).digest("hex").slice(0, 12);
 
 // Pure: this session's own readings stamped with `at` (see above), and the pool's record of every
@@ -231,13 +266,19 @@ export function syncRateLimits(mine, env, sid = null, now = Date.now() / 1000) {
   const { text, old } = readLearned(file, oldFileOf);
   let shared = null;
   try { shared = JSON.parse(text); } catch { /* first reading */ }
+  if (!shared || typeof shared !== "object" || Array.isArray(shared)) shared = null;
+  // Readings that cannot be real: this session's are not pooled, the pool's are dropped (#124) and
+  // the file is written without them.
+  const asRead = shared;
+  shared = plausibleRateLimits(shared, now);
+  mine = plausibleRateLimits(mine, now);
   const { stamped, sessions } = stampReadings(mine, shared, sid, now);
   const merged = mergeRateLimits(stamped, shared, now);
   // The pool: the freshest reading of each window, and each session's last readings; written only
   // when something in it changed.
   const pick = (o) => ({ five_hour: o && o.five_hour, seven_day: o && o.seven_day });
-  const changed = JSON.stringify(pick(merged)) !== JSON.stringify(pick(shared))
-    || JSON.stringify(sessions) !== JSON.stringify((shared && shared.sessions) || {});
+  const changed = JSON.stringify(pick(merged)) !== JSON.stringify(pick(asRead))
+    || JSON.stringify(sessions) !== JSON.stringify((asRead && asRead.sessions) || {});
   if (old || changed) {
     try { // atomic: concurrent sessions never read a half-written file
       writeAtomic(file, JSON.stringify({ ...pick(merged), sessions }));
