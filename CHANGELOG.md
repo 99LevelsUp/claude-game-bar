@@ -70,6 +70,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mugshot's default face and a silent chat, so the bar takes its shape at once. The daemon keeps
   this blank frame drawn for the session it saw last; when no daemon runs, the offline line stays.
 
+### Added
+
+- **`claude-game-bar test-card` keeps the glyph step you confirm** (#38). After the card it asks
+  which step looks right and saves the answer in the user directory (`glyphs.json`) for that kind
+  of terminal (VTE, Windows Terminal, VS Code, …), so every session in such a terminal draws it,
+  for example octants on a VTE terminal that the bar would give wedges. `auto` goes back to the
+  bar's own pick, `GAMEBAR_GLYPHS` still wins over both, and `uninstall` forgets the answers.
+
 ## [3.0.0] - 2026-11-23
 
 The skin engine is new, and the skin format with it: a breaking change for skins of your own.

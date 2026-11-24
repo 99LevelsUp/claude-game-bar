@@ -16,7 +16,8 @@
 //   claude-game-bar skin next             # cycle to the next skin
 //   claude-game-bar skin                  # list skins (also: skin list), show the current one
 //   claude-game-bar theme ...             # the older name of `skin`; a game's name picks its default skin
-//   claude-game-bar test-card             # show which glyphs this terminal draws
+//   claude-game-bar test-card             # show which glyphs this terminal draws, and keep the step
+//                                         # you confirm for terminals of its kind
 //
 // It merges into your existing settings (other hooks / statusline are preserved or
 // backed up), is safe to re-run, and prints what to do next. It also takes over an installation
@@ -40,7 +41,10 @@ import { removeOldPackage, OLD_PACKAGE } from "../src/install/old-package.js";
 import { STATUSLINE, CLIENT, NODE_CMD, clientCommand } from "../src/install/shell.js";
 import { STEPS, testCardLines } from "../src/kit/raster/glyphs.js";
 import { convertImage } from "../src/kit/raster/glyph-render.js";
-import { terminalStep } from "../src/kit/raster/glyph-level.js";
+import {
+  terminalStep, terminalClass, confirmedSteps, saveConfirmedStep, clearConfirmedSteps, glyphsFile, readAnswer,
+} from "../src/kit/raster/glyph-level.js";
+import { createInterface } from "node:readline/promises";
 import { decodePng } from "../src/kit/raster/png.js";
 import { sgrFg, sgrBg } from "../src/kit/ansi.js";
 import { ensureEmojiFont } from "../src/install/emoji-font.js";
@@ -285,8 +289,9 @@ function sampleImage() {
 }
 
 // The glyph test card, then one face drawn at every step side by side, so the steps this terminal
-// draws correctly can be judged by eye. The face is the default game's mugshot (sampleImage).
-function testCard() {
+// draws correctly can be judged by eye. The face is the default game's mugshot (sampleImage). In a
+// terminal it then asks which step looks right and keeps the answer for terminals of this class.
+async function testCard() {
   console.log("Glyph test card: each step below should show clean block shapes, no boxes, question");
   console.log("marks or gaps. The last step that looks right is the richest one this terminal can draw.\n");
   for (const line of testCardLines()) console.log(line);
@@ -304,8 +309,36 @@ function testCard() {
       console.log("  " + parts.join(""));
     }
   }
-  console.log(`\nThis terminal gets the "${terminalStep(process.env)}" step.`);
-  console.log(`To choose another, set GAMEBAR_GLYPHS to one of: ${STEPS.join(", ")} (in the env block of settings.json).`);
+  const env = process.env;
+  const cls = terminalClass(env);
+  const step = terminalStep(env);
+  const saved = confirmedSteps(env)[cls];
+  console.log(`\nThis terminal (${cls}) gets the "${step}" step${saved === step ? ", the one you confirmed" : ""}.`);
+  const forced = envGet("GLYPHS", env);
+  if (forced) {
+    console.log(`${newName("GLYPHS")}=${forced} is set and wins over a step confirmed here; remove it to use one.`);
+    return;
+  }
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log(`Run claude-game-bar test-card in the terminal itself to keep another step for ${cls} terminals,`);
+    console.log(`or set ${newName("GLYPHS")} to one of: ${STEPS.join(", ")} (in the env block of settings.json).`);
+    return;
+  }
+  // The question (#38): the step typed is kept for every session in a terminal of this class.
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  let answer = "";
+  try {
+    answer = await rl.question(`Which step looks right here? (${STEPS.join(", ")}, auto) [${step}] `);
+  } finally { rl.close(); }
+  const a = readAnswer(answer);
+  if (a.invalid) console.log(`"${a.invalid}" is not a step; nothing saved.`);
+  else if (a.forget) {
+    saveConfirmedStep(cls, null, env);
+    console.log(`Forgotten: ${cls} terminals get the "${terminalStep(env)}" step their identity gives.`);
+  } else if (a.step) {
+    saveConfirmedStep(cls, a.step, env);
+    console.log(`Saved in ${glyphsFile(env)}: ${cls} terminals draw "${a.step}" from the next frame on.`);
+  }
 }
 
 async function main() {
@@ -320,7 +353,7 @@ async function main() {
   if (args.cmd === "uninstall") {
     uninstall(cfg);
     save(p, cfg);
-    if (user) { clearTheme(); removeOldThemeFile(); clearSkin(); } // drop the saved choices too
+    if (user) { clearTheme(); removeOldThemeFile(); clearSkin(); clearConfirmedSteps(); } // drop the saved choices too
     const notes = stopDaemon({ hash: HASH, daemonJs: path.join(SRC_DIR, "daemon.js") });
     console.log(`✓ removed claude-game-bar from ${p}`);
     for (const n of notes) console.log(`  note       : ${n}`);
