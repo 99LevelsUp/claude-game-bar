@@ -11,9 +11,10 @@
 // function, a Symbol) is disabled until its file changes (size or mtime) or it is called for
 // another skin. A script that runs past its budget (stopped by
 // the vm timeout or pinned by the backstop) is disabled only for a cooldown, since one spike of
-// load on the machine is enough to make it late: 30 s, doubling each time it runs past its budget
-// again (1, 2, 4 ... min) up to 10 min. A call that returns resets the cooldown to 30 s; a change
-// of its file or skin ends it at once. While it cools down it is not called at all, so it costs
+// load on the machine is enough to make it late: 2 s, doubling each time it runs past its budget
+// again (4, 8, 16 s ...) up to 10 min. A call that returns resets the cooldown to 2 s; a change
+// of its file or skin ends it at once. A timeout result and a cooling script's result carry
+// `streak`, the timeouts in a row, so the caller can tell a one-off from a slow script (#94). While it cools down it is not called at all, so it costs
 // nothing per frame. Scripts are trusted like any code the user installs;
 // the vm context keeps timers, `require` and `eval` out of reach, but it is not a security
 // boundary.
@@ -39,7 +40,7 @@ export const stamp = (file) => {
 //                 performance.now(), so a change of the wall clock cannot stretch one)
 //   simulateNativeHang  test hook: a script path whose calls block outside the vm timeout
 export const CALL_BUDGET_MS = 20;
-const COOLDOWN_MS = 30_000;
+export const FIRST_COOLDOWN_MS = 2_000;
 const COOLDOWN_MAX_MS = 600_000;
 
 export function createScriptHost({ callBudgetMs = CALL_BUDGET_MS, graceMs = 40, startupMs = 500, maxHeapMb = 64, now = () => performance.now(), simulateNativeHang } = {}) {
@@ -111,6 +112,9 @@ export function createScriptHost({ callBudgetMs = CALL_BUDGET_MS, graceMs = 40, 
     }
   }
 
+  // The timeouts in a row of a call's script, or 0.
+  const streakOf = (call) => disabled.get(keyOf(call.script, call.skin))?.streak ?? 0;
+
   // Turns a failed script off: for good after an error, for a cooldown after a timeout. Returns
   // the cooldown in ms (Infinity after an error).
   function disable(call, kind) {
@@ -122,7 +126,7 @@ export function createScriptHost({ callBudgetMs = CALL_BUDGET_MS, graceMs = 40, 
     }
     const prev = disabled.get(key);
     const streak = prev && prev.kind === "timeout" && prev.stamp === st ? prev.streak + 1 : 1;
-    const ms = Math.min(COOLDOWN_MS * 2 ** (streak - 1), COOLDOWN_MAX_MS);
+    const ms = Math.min(FIRST_COOLDOWN_MS * 2 ** (streak - 1), COOLDOWN_MAX_MS);
     disabled.set(key, { stamp: st, kind: "timeout", streak, until: now() + ms });
     return ms;
   }
@@ -149,7 +153,7 @@ export function createScriptHost({ callBudgetMs = CALL_BUDGET_MS, graceMs = 40, 
         }
         if (r.status === "error" || r.status === "timeout") {
           const ms = disable(calls[i], r.status);
-          if (r.status === "timeout") r.retryMs = ms;
+          if (r.status === "timeout") { r.retryMs = ms; r.streak = streakOf(calls[i]); }
         } else if (r.status === "ok") {
           const key = keyOf(calls[i].script, calls[i].skin);
           if (disabled.get(key)?.kind === "timeout") disabled.delete(key);
@@ -177,14 +181,14 @@ export function createScriptHost({ callBudgetMs = CALL_BUDGET_MS, graceMs = 40, 
     if (!calls || r.elapsed <= callBudgetMs + grace) return null;
     const retryMs = disable(calls[r.index], "timeout");
     replace();
-    return { ...r, script: calls[r.index].script, retryMs };
+    return { ...r, script: calls[r.index].script, retryMs, streak: streakOf(calls[r.index]) };
   }
 
   // What a call to a script that is off returns.
   function offResult(script, e) {
     if (e.kind === "error") return disabledResult(script);
     const s = Math.max(1, Math.ceil((e.until - now()) / 1000));
-    return { status: "disabled", message: `${script}: stopped after running past its budget; retried in ${s} s` };
+    return { status: "disabled", cooling: true, streak: e.streak, message: `${script}: stopped after running past its budget; retried in ${s} s` };
   }
 
   // Before a new batch: let a batch the host gave up on finish its current call, for at most one
@@ -236,7 +240,7 @@ export function createScriptHost({ callBudgetMs = CALL_BUDGET_MS, graceMs = 40, 
             : r.status === "disabled"
               ? disabledResult(c.script)
               : r.status === "timeout"
-                ? { status: "timeout", message: `${c.script}: ${r.message}`, retryMs: r.retryMs }
+                ? { status: "timeout", message: `${c.script}: ${r.message}`, retryMs: r.retryMs, streak: r.streak }
                 : { status: r.status, message: `${c.script}: ${r.message}` };
         });
       }
@@ -251,6 +255,7 @@ export function createScriptHost({ callBudgetMs = CALL_BUDGET_MS, graceMs = 40, 
           status: "timeout",
           message: `${hang.script}: did not return within ${Math.round(hang.elapsed)} ms and was stopped; the script worker was restarted`,
           retryMs: hang.retryMs,
+          streak: hang.streak,
         };
       }
     } else if (Atomics.load(w.i32, SLOT.RUN_INDEX) < 0 && Atomics.load(w.i32, SLOT.DONE) < s) {

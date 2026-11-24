@@ -44,7 +44,7 @@ const BUDGET = 20;
 const GRACE = 40;
 // Every other check must not depend on how fast the machine is. On a loaded machine a call that
 // loads its file (read, compile, new context) can take seconds and a worker seconds to start;
-// one such call past its budget turns its script off for the 30 s cooldown and the checks after
+// one such call past its budget turns its script off for a cooldown and the checks after
 // it fail with it. So the scripts that return run on a host whose budget and grace no machine
 // runs a trivial call past.
 const LONG = 10000;
@@ -124,7 +124,7 @@ console.log("a hang the vm timeout cannot reach:");
   console.log(`  backstop fired after ${fmt(ms(t))} ms`);
   ok(r[1].status === "timeout", `the hanging call returns a timeout result (${r[1].status})`);
   ok(hung.isDisabled(HANG), "the script whose index was in the buffer is disabled");
-  ok(r[1].retryMs === 30000 && /stopped/.test(r[1].message), `for 30 s, as for any timeout (${r[1].retryMs}: ${r[1].message})`);
+  ok(r[1].retryMs === 2000 && r[1].streak === 1 && /stopped/.test(r[1].message), `for 2 s, as for any first timeout (${r[1].retryMs}: ${r[1].message})`);
   ok(!hung.isDisabled(FRAME) && !hung.isDisabled(ECHO), "no other script is disabled");
   ok(r[0].status === "skipped" && r[2].status === "skipped", "the other calls draw their defaults this pass");
   ok(hung.spawns === spawns + 1, "the worker was replaced");
@@ -220,36 +220,40 @@ console.log("a script that runs past its budget is off for a while, then retried
   const SECOND = 1000, MINUTE = 60 * SECOND;
 
   const [first] = cool.runBatch([loops]);
-  ok(first.status === "timeout" && first.retryMs === 30 * SECOND, `a timeout turns it off for 30 s (${first.status}, ${first.retryMs})`);
+  ok(first.status === "timeout" && first.retryMs === 2 * SECOND && first.streak === 1, `a timeout turns it off for 2 s, the first in a row (${first.status}, ${first.retryMs}, ${first.streak})`);
   ok(/stopped/.test(first.message), `the result says it was stopped (${first.message})`);
   ok(cool.isDisabled(FLAKY), "it is off");
-  clock += 30 * SECOND - 1;
+  clock += 2 * SECOND - 1;
   const [cooling] = cool.runBatch([returns]);
   ok(cooling.status === "disabled" && !cooling.output, `while it cools down it is not called, even with an input it would return for (${cooling.status})`);
+  ok(cooling.cooling === true && cooling.streak === 1, `and the result says it is cooling down after its first timeout (${JSON.stringify(cooling)})`);
   clock += 1;
-  ok(!cool.isDisabled(FLAKY), "after 30 s it is no longer off");
+  ok(!cool.isDisabled(FLAKY), "after 2 s it is no longer off");
   const [back] = cool.runBatch([returns]);
   ok(back.status === "ok" && back.output.ran === true, `and it runs again (${JSON.stringify(back)})`);
 
   // It keeps timing out: each time the cooldown doubles, up to 10 minutes.
-  const want = [30 * SECOND, MINUTE, 2 * MINUTE, 4 * MINUTE, 8 * MINUTE, 10 * MINUTE, 10 * MINUTE];
-  const got = [];
+  const want = [2, 4, 8, 16, 32, 64, 128, 256, 512, 600, 600].map((s) => s * SECOND);
+  const got = [], streaks = [];
   let heldOff = true;
   for (const _ of want) {
     const [r] = cool.runBatch([loops]);
     got.push(r.retryMs);
+    streaks.push(r.streak);
     clock += r.retryMs - 1;
     if (cool.runBatch([returns])[0].status !== "disabled") heldOff = false;
     clock += 1;
   }
   ok(same(got, want), `the cooldown doubles and stops at 10 min (${got.map((x) => x / SECOND).join(", ")} s)`);
   ok(heldOff, "and the script is not called before each cooldown ends");
+  ok(same(streaks, want.map((_, i) => i + 1)), `each timeout result counts the timeouts in a row (${streaks.join(", ")})`);
+  void MINUTE;
 
   // A call that completes resets the backoff.
   const [fine] = cool.runBatch([returns]);
   const [again] = cool.runBatch([loops]);
-  ok(fine.status === "ok" && again.status === "timeout" && again.retryMs === 30 * SECOND,
-    `a call that completes starts the cooldown at 30 s again (${again.retryMs})`);
+  ok(fine.status === "ok" && again.status === "timeout" && again.retryMs === 2 * SECOND && again.streak === 1,
+    `a call that completes starts the cooldown at 2 s again (${again.retryMs})`);
 
   // A file change ends the cooldown at once.
   writeFileSync(FLAKY, `function render(input) { return { ran: "rewritten" }; }`);

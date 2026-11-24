@@ -483,21 +483,26 @@ try {
 
     // A script stuck where its timeout cannot reach it: the backstop restarts the worker, which uses
     // up the pass. The next session's healthy script draws its default for that pass, with no
-    // warning, and runs on the following pass.
+    // warning, and runs on the following pass. The stuck script warns only the second time in a
+    // row (#94); the host's cooldown clock is the test's.
     {
       const hang = scripted("stuck", 'function render() { return { params: { icon: "NEVER" } }; }');
       scripted("calm", 'function render() { return { params: { icon: "CALM " } }; }');
-      const host = createScriptHost({ simulateNativeHang: hang });
+      let hostClock = 0;
+      const host = createScriptHost({ simulateNativeHang: hang, now: () => hostClock });
       const a = session("a-stuck", { env: { GAMEBAR_SKIN: "stuck" } });
       const b = session("b-calm", { env: { GAMEBAR_SKIN: "calm" } });
       const t0 = Date.now();
       const state = createState({ version: VERSION, now: t0, scriptHost: host, scriptPassMs: 20 });
       timed(state, t0);
-      ok(/gamebar: .*s\.js/.test(text(a)) && !text(a).includes("NEVER"), "the stuck script's element draws its default and a warning shows");
+      ok(!text(a).includes("NEVER") && !text(a).includes("gamebar:"), "the stuck script's element draws its default, with no warning the first time in a row");
       ok(!text(b).includes("CALM") && !text(b).includes("gamebar:") && host.spawns === 2,
         "the next session's script is skipped for that pass, with no warning, once the restart used up the pass");
       timed(state, t0 + 1000);
       ok(text(b).includes("CALM"), "and runs on the following pass");
+      hostClock += 2000;
+      timed(state, t0 + 2000);
+      ok(/gamebar: .*s\.js/.test(text(a)) && !text(a).includes("NEVER"), "stuck again after its 2 s cooldown, it draws its default and a warning shows");
       host.close();
       unlinkSync(payloadFile(a.key));
       unlinkSync(payloadFile(b.key));
