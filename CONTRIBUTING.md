@@ -267,13 +267,16 @@ Budgets and failures:
 
 - Each call has 20 ms, enforced by the script's own timeout. All scripts of one render pass of the
   daemon share 200 ms across every session it draws; when a session finds none left, its nodes
-  draw their defaults for that render, with no warning and nothing turned off.
+  keep their script's last output (up to 5 s old, else their defaults) for that render, with no
+  warning and nothing turned off.
 - A script that throws, cannot be loaded or returns a promise draws its node's default (a
   sprite's `default_frame`, else a blank of its width), shows a warning under the bar, and is
   not run again until its file or its skin changes.
-- A script that runs past its budget is stopped and turned off for a cooldown: 30 s, doubling each
-  time it runs late again, up to 10 minutes. A call that returns in time resets the cooldown to
-  30 s; a change of its file or skin ends it at once.
+- A script that runs past its budget is stopped and turned off for a cooldown: 2 s, doubling each
+  time it runs late again in a row, up to 10 minutes. A call that returns in time resets the
+  cooldown to 2 s; a change of its file or skin ends it at once. The first time in a row is most
+  likely the machine stalling, so its node keeps the script's last output (up to 5 s old) and no
+  warning shows; from the second time in a row it draws its default and the warning line says so.
 - All scripts share one worker thread with a 64 MB heap.
 
 Scripts run only in the render daemon. The one-shot status line (no bash 5, or no daemon) runs

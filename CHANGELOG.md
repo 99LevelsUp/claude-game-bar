@@ -50,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   render or the daemon was seen to hang for an hour and pile up with others. Its work now runs
   without blocking, and it ends itself after 20 s whatever a child process does; a healthy one
   still takes about 1 s.
+- **One slow moment no longer freezes the mugshot for 30 s** (#94). A skin script that ran past
+  its 20 ms budget was turned off for 30 s, and the DOOM face showed its default meanwhile; one
+  stall of the machine was enough (a cold script measures about 3 ms on an idle PC). The first
+  time in a row a script runs late, it is now turned off for 2 s, its node keeps the script's last
+  output and no warning shows. Each further time in a row doubles the pause (4, 8, 16 s ... up to
+  10 min) and the warning line says so; a call that returns in time starts over at 2 s.
 
 ### Changed
 

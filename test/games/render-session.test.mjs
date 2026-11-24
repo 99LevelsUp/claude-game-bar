@@ -52,7 +52,7 @@ const { createScriptPass } = await import("../../src/kit/skin/scripts.js");
 
 // The renders below run the skin's scripts through a host of their own with a budget no script can
 // run past. With the default 20 ms a cold worker's first call can time out, which turns the
-// mugshot's script off for 30 s of real time, so whether two renders drew the same face would
+// mugshot's script off for a cooldown of real time, so whether two renders drew the same face would
 // depend on how long the test took (the script budget has its own tests).
 const HOST = createScriptHost({ callBudgetMs: 10_000 });
 const scripts = () => ({ host: HOST, pass: createScriptPass({ budgetMs: 60_000, callBudgetMs: 10_000 }) });

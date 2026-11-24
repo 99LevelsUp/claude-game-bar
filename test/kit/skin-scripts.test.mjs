@@ -114,7 +114,9 @@ const host = createScriptHost({ callBudgetMs: 2000, graceMs: 2000, startupMs: 10
 // The product's per-call budget, for the scripts that loop: they run past any budget, so the
 // shortest keeps the checks quick. The pass's deadline is long, so the vm timeout, not the
 // backstop, stops them however late it fires.
-const loopHost = createScriptHost({ startupMs: 10000 });
+// Its cooldown clock is the test's, so a cooldown passes without waiting for it.
+let loopClock = 0;
+const loopHost = createScriptHost({ startupMs: 10000, now: () => loopClock });
 // The host as runScripts uses it, recording each batch's result statuses.
 const spied = (h) => {
   const statuses = [];
@@ -185,13 +187,19 @@ min_width = 6
     const bare = drawFit(fit, { values: VALUES, width: WIDTH, ctx: CTX });
     const spy = spied(loopHost);
     const last = () => spy.statuses[spy.statuses.length - 1];
-    const r = run(fit, { host: spy });
+    const first = run(fit, { host: spy });
     ok(same(last(), ["timeout"]), `the script runs past its budget (${last()})`);
-    ok(same(draw(r), bare), "the hotbar draws without a highlighted cell and every other node is unchanged");
+    ok(same(draw(first), bare), "the hotbar draws without a highlighted cell and every other node is unchanged");
+    ok(first.warnings.length === 0, `the first time in a row, most likely the machine stalling: no warning (${first.warnings[0]?.message})`);
+    const cooling = run(fit, { host: spy });
+    ok(same(last(), ["disabled"]) && cooling.warnings.length === 0, `while that first 2 s cooldown lasts it is not called, and still no warning (${last()})`);
+    loopClock += 2000;
+    const r = run(fit, { host: spy });
+    ok(same(last(), ["timeout"]), `after 2 s it is tried again and runs past its budget again (${last()})`);
     ok(r.warnings.length === 1 && r.warnings[0].element === "hotbar" && /loop\.js/.test(r.warnings[0].message)
-      && typeof r.warnings[0].key === "string", `one warning naming the node's script (${r.warnings[0]?.message})`);
-    ok(/stopped/.test(r.warnings[0].message) && /for 30 s, then retried/.test(r.warnings[0].message),
-      "it says the script was stopped and will be tried again in 30 s");
+      && typeof r.warnings[0].key === "string", `the second time in a row, one warning naming the node's script (${r.warnings[0]?.message})`);
+    ok(/stopped/.test(r.warnings[0].message) && /for 4 s, then retried/.test(r.warnings[0].message),
+      "it says the script was stopped and will be tried again in 4 s");
     const again = run(fit, { host: spy });
     ok(same(draw(again), bare), "on the next pass it still draws its default");
     ok(same(last(), ["disabled"]), `on the next pass the script is not called (${last()})`);
@@ -201,6 +209,24 @@ min_width = 6
     utimesSync(skin.file, t2, t2);
     run(fitOf(load(skin.file)), { host: spy });
     ok(same(last(), ["timeout"]), `once the skin changes, the script is run again (${last()})`);
+  }
+
+  console.log("a highlight script that runs late once keeps its last pick (#94)");
+  {
+    // It picks a cell, then loops on its next call: the late call is its first in a row.
+    const skin = load(userSkin("hotbar-late", hotbar("late.js"),
+      { "late.js": "function render(i) { if (i.state && i.state.n) for (;;) {} return { selected: 1, state: { n: 1 } }; }" }));
+    const fit = fitOf(skin);
+    const spy = spied(loopHost);
+    const state = new Map();
+    const picked = run(fit, { host: spy, state });
+    const late = run(fit, { host: spy, state, now: NOW + 1 });
+    ok(same(spy.statuses, [["ok"], ["timeout"]]), `it picks, then runs past its budget (${JSON.stringify(spy.statuses)})`);
+    ok(same(draw(late), draw(picked)) && late.warnings.length === 0, "the late render draws its last pick, with no warning");
+    const cool = run(fit, { host: spy, state, now: NOW + 2 });
+    ok(same(spy.statuses[2], ["disabled"]) && same(draw(cool), draw(picked)), "and so does a render while its first cooldown lasts");
+    const old = run(fit, { host: spy, state, now: NOW + 7 });
+    ok(!same(draw(old), draw(picked)), "a last pick older than HOLD_LAST_S is no longer drawn");
   }
 
   console.log("a script that returns a frame name");
@@ -367,6 +393,7 @@ rows = 4
   console.log("renderSession");
   {
     userSkin("session-loop", oneText("loop.js"), { "loop.js": "function render() { for (;;) {} }" });
+    userSkin("session-throw", oneText("throw.js"), { "throw.js": "function render() { throw new Error(\"broken\"); }" });
     userSkin("session-icon", oneText("icon.js", { width: 12 }), { "icon.js": "function render(i) { return { params: { icon: \"SCRIPTED\" } }; }" });
     const env = { ...process.env, COLUMNS: "120", GAMEBAR_SKIN: "session-icon" };
     const data = { model: { display_name: "Opus" } };
@@ -374,9 +401,9 @@ rows = 4
     ok(scripted.some((l) => plain(l).includes("SCRIPTED")), "a skin's script changes the session's bar");
     const skipped = renderSession({ data, env, now: NOW, scripts: false });
     ok(!skipped.some((l) => plain(l).includes("SCRIPTED")), "with scripts turned off nothing runs");
-    const loopEnv = { ...env, GAMEBAR_SKIN: "session-loop" };
-    const failed = renderSession({ data, env: loopEnv, now: NOW, scripts: { host: loopHost, pass: roomyPass(), state: new Map() } });
-    ok(failed.some((l) => /gamebar: .*loop\.js/.test(plain(l))), "a failed script shows on the warning line");
+    const throwEnv = { ...env, GAMEBAR_SKIN: "session-throw" };
+    const failed = renderSession({ data, env: throwEnv, now: NOW, scripts: { host, pass: roomyPass(), state: new Map() } });
+    ok(failed.some((l) => /gamebar: .*throw\.js/.test(plain(l))), "a failed script shows on the warning line");
 
     const res = spawnSync(process.execPath, [path.join(ROOT, "src", "statusline.js")], {
       input: JSON.stringify(data), encoding: "utf8", timeout: 20000,

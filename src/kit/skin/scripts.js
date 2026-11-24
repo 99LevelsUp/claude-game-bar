@@ -44,10 +44,12 @@
 //
 // A script that throws leaves its node on its default look and puts a warning under the bar, and
 // the host keeps it off until its file or its skin changes. A script that runs past its budget does
-// the same, but the host keeps it off only for a cooldown (30 s, doubling while it keeps running
+// the same, but the host keeps it off only for a cooldown (2 s, doubling while it keeps running
 // late, up to 10 min) and then tries it again; the warning says so, under the same key, so a retry
-// that runs late again does not show it anew. When the pass has no time left for a session, that
-// session's nodes draw their defaults for this render only: no warning, nothing turned off.
+// that runs late again does not show it anew. The first time in a row a script runs late is most
+// likely the machine stalling, not the script: its node keeps its last output (HOLD_LAST_S) and no
+// warning shows. When the pass has no time left for a session, that session's nodes keep their
+// last output the same way, nothing turned off.
 
 import path from "node:path";
 import { createScriptHost, stamp as stampOf, CALL_BUDGET_MS } from "../../platform/scripts/host.js";
@@ -90,7 +92,11 @@ export function resolveScript(ref, folder, resolveAsset) {
 // Why each failed script failed, by its warning's key, for as long as this process lives.
 const reasons = new Map();
 
-// A cooldown as the warning says it: "30 s", "2 min".
+// A script late for the first time in a row: the result of the call that ran late, or of a call
+// made while that first cooldown lasts.
+const firstLate = (res) => (res.status === "timeout" || (res.status === "disabled" && res.cooling)) && res.streak === 1;
+
+// A cooldown as the warning says it: "4 s", "2 min".
 const duration = (ms) => (ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`);
 
 // The conversation libraries a drawn node names (a chat's), or none.
@@ -191,8 +197,10 @@ export function runScripts(fit, { file = null, host, pass = createScriptPass(), 
         const kept = state.get(pl.r.path);
         const own = Object.hasOwn(out, "state") ? (isPlainObject(out.state) ? out.state : {}) : kept && kept.stamp === stamp ? kept.state : {};
         state.set(pl.r.path, { stamp, state: own, last: out, lastAt: now });
-      } else if (res.status === "skipped") {
-        // Not run this pass: the script's last output, while it is recent and of this script.
+      } else if (res.status === "skipped" || firstLate(res)) {
+        // Not run this pass, or late for the first time in a row (one spike of load on the
+        // machine, #94): the script's last output, while it is recent and of this script, and no
+        // warning. A script late again in a row is warned about below.
         const kept = library ? null : state.get(pl.r.path);
         if (kept && kept.stamp === stamp && kept.last && now - kept.lastAt >= 0 && now - kept.lastAt <= HOLD_LAST_S) scripts[pl.r.path] = kept.last;
       } else {
