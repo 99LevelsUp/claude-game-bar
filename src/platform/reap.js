@@ -2,7 +2,7 @@
 // hung statusLine wrappers that feed the flood. Driven by src/hook.js, both on hook events and as
 // `node src/hook.js --reap` from the render path.
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFile } from "node:child_process";
 import { envNum } from "./runtime.js";
 import { envGet } from "./env.js";
 
@@ -89,4 +89,43 @@ export function reapStaleShells() {
     spawnSync("taskkill", ["/F", ...args], { encoding: "utf8", timeout: 5000, windowsHide: true });
   } catch { return 0; }
   return pids.length;
+}
+
+// --- The detached reaper ---------------------------------------------------------------------
+// `node src/hook.js --reap` runs on its own, started detached by the daemon and by the one-shot
+// render. Detached reapers were seen to hang for an hour with no child left and pile up (#53;
+// one started by hand exits in about 1 s). The cause was never reproduced, so the reaper bounds
+// its own life instead: its work runs asynchronously, which keeps the event loop free, and a
+// watchdog ends the process after REAPER_LIFE_MS whatever a child, a pipe or the work does.
+// The daemon also kills a reaper it started after 30 s; nothing else watches one the one-shot
+// render started.
+export const REAPER_LIFE_MS = 20000; // both steps time out after 5 s; a healthy reaper takes ~1 s
+
+// One child, its stdout, or null when it fails, times out or exits non-zero.
+function execText(file, args, timeout) {
+  return new Promise((resolve) => {
+    try {
+      execFile(file, args, { encoding: "utf8", timeout, windowsHide: true }, (err, stdout) => resolve(err ? null : stdout));
+    } catch { resolve(null); }
+  });
+}
+
+// reapStaleShells for the detached reaper: the same selection and kill, without blocking.
+export async function reapStaleShellsAsync({ platform = process.platform, exec = execText } = {}) {
+  if (platform !== "win32" || !REAP_ON) return 0;
+  const listed = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", LIST_SHELLS_PS], 5000);
+  const pids = stalePids(parseBashShells(listed));
+  if (pids.length === 0) return 0;
+  // taskkill exits non-zero when a PID has already gone on its own; that is fine.
+  await exec("taskkill", ["/F", ...pids.flatMap((pid) => ["/PID", String(pid)])], 5000);
+  return pids.length;
+}
+
+// The body of `node src/hook.js --reap`: reap, then exit, and exit anyway once the watchdog fires.
+export function runReaper({ reap = reapStaleShellsAsync, lifeMs = REAPER_LIFE_MS, exit = (code) => process.exit(code) } = {}) {
+  const watchdog = setTimeout(() => exit(0), lifeMs);
+  return Promise.resolve()
+    .then(() => reap())
+    .catch(() => 0)
+    .finally(() => { clearTimeout(watchdog); exit(0); });
 }
