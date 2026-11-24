@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-24
+
 ### Fixed
 
 - **A box without a border places its title by `title_align`** (#106). The title was always
@@ -903,7 +905,8 @@ Note: no changes to the published package contents (`src`, `bin`, `presets`,
 - Mugshot tracking session health, plus usage, model, project, and system stats.
 - Live subagent list with always-visible AGENTS and TASKS boxes.
 
-[Unreleased]: https://github.com/99LevelsUp/claude-game-bar/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/99LevelsUp/claude-game-bar/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/99LevelsUp/claude-game-bar/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/99LevelsUp/claude-game-bar/compare/v2.2.0...v3.0.0
 [2.2.0]: https://github.com/99LevelsUp/claude-game-bar/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/99LevelsUp/claude-game-bar/compare/v2.0.0...v2.1.0
