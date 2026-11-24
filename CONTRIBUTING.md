@@ -256,7 +256,7 @@ The result (anything else is ignored):
 |---|---|
 | `frame` | the frame a `sprite` draws: a file name in its `frames` folder, `.png` added when it has no extension |
 | `selected` | the cells a `grid` selects: one index among `children`, or a list of indices or child ids; any number, or none |
-| `params` | parameters drawn instead of the skin's this render (characters, colours, icons). A value the node's kind does not accept keeps the skin's. A script never changes a node's size: a node drawn wider is cut to its columns |
+| `params` | parameters drawn instead of the skin's this render (characters, colours, icons). A value the node's kind does not accept keeps the skin's. A `color` or `background` on a container reaches its children as the skin's would: a child that sets no `color` of its own takes it, at any depth, and the background is the surface they are drawn on. A script never changes a node's size: a node drawn wider is cut to its columns |
 | `state` | kept for the next run; it is the only thing that survives, since the input is a copy |
 
 Where a script comes from follows the asset rules above: `<game>:<path>` from that game's assets, a
