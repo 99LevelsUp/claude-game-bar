@@ -246,7 +246,15 @@ The DOOM mugshot is drawn with block glyphs, from plain half blocks up to Unicod
 claude-game-bar test-card
 ```
 
-It prints each glyph step in turn, then the mugshot drawn at every step. A step whose glyphs show as boxes, question marks or gaps is one this terminal cannot draw. The closing lines name the step the bar picked for this terminal and how to choose another.
+It prints each glyph step in turn, then the mugshot drawn at every step. A step whose glyphs show as boxes, question marks or gaps is one this terminal cannot draw. The closing lines name the kind of terminal and the step the bar picked for it, and ask which step looks right:
+
+```
+This terminal (vte) gets the "wedge" step.
+Which step looks right here? (half, quadrant, sextant, wedge, octant, auto) [wedge] octant
+Saved in ~/.claude/claude-game-bar/glyphs.json: vte terminals draw "octant" from the next frame on.
+```
+
+Press Enter to keep the step, type a step name to keep that one for every session in a terminal of this kind, or `auto` to go back to the bar's own pick. The answer holds until you answer again; `uninstall` forgets it.
 
 The steps, from plainest to richest: `half`, `quadrant`, `sextant`, `wedge`, `octant`. The bar picks one from the terminal type:
 
@@ -257,7 +265,7 @@ The steps, from plainest to richest: `half`, `quadrant`, `sextant`, `wedge`, `oc
 | VS Code, WezTerm, VTE-based terminals (GNOME Terminal, Tilix, …) | `wedge` |
 | anything else | `half` |
 
-Set `GAMEBAR_GLYPHS` to one of the step names to override the pick, for example `GAMEBAR_GLYPHS=sextant` when the font lacks octants. A `sprite`'s `glyphs` parameter caps the step for its own images; the mugshot uses the lower of the two.
+A step confirmed on the test card replaces the pick for its kind of terminal. Set `GAMEBAR_GLYPHS` to one of the step names to override both for every terminal, for example `GAMEBAR_GLYPHS=sextant` when the font lacks octants. A `sprite`'s `glyphs` parameter caps the step for its own images; the mugshot uses the lower of the two.
 
 ## How it works
 

@@ -213,7 +213,8 @@ Images are converted to block glyphs inside the bar (`src/kit/raster/`): a PNG d
 shape-matching renderer and a cache (in memory, and on disk for the one-shot command). The glyph
 step (half, quadrant, sextant, wedge, octant) comes from the terminal's identity
 (`src/kit/raster/glyph-level.js`), capped per image by the sprite's `glyphs` parameter.
-`claude-game-bar test-card` shows which steps a terminal really draws.
+`claude-game-bar test-card` shows which steps a terminal really draws, and the step the user
+confirms there is kept in the user directory for that class of terminal and wins over the guess.
 
 ## Where the design came from
 
