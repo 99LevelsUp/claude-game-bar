@@ -65,6 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only its largest unit, and that unit was cut: a 5-hour reset 1 h 49 min away read `1h`, almost an
   hour early. It is now rounded to the nearest: `2h`; 4 h 59 min reads `5h`, 23 h 40 min `1d`. The
   full form (`1h49m`) is unchanged.
+- **A rate-limit reading that cannot be real no longer wins the account's pool** (#124). The pool
+  keeps, per window, the reading that changed last, so one made-up reading (a reset in the year
+  2255) overrode every session's and every bar of the account showed a 5-hour reset in `999d`. A
+  reading whose reset is further ahead than its window (5 hours, 7 days, plus an hour for clock
+  skew), or whose percentage is negative or not a number, is now left out of the pool and of the
+  mugshot's health, and one already in the pool is dropped. Above 100 % counts as 100 %.
 
 ### Changed
 

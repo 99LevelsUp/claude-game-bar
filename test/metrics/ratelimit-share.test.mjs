@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSyn
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { fresherWindow, mergeRateLimits, accountFileName } from "../../src/metrics/ratelimits.js";
+import { fresherWindow, mergeRateLimits, accountFileName, plausibleReading, plausibleRateLimits } from "../../src/metrics/ratelimits.js";
 import { accountKey, keyOfAccount } from "../../src/platform/account.js";
 import { sandboxEnv } from "../_sandbox-env.mjs";
 
@@ -15,7 +15,7 @@ let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g, "");
 
-const W = 2_000_000_000; // a resets_at (seconds)
+let W = 2_000_000_000; // a resets_at (seconds); the renders below move it to 4 hours from now
 const w = (p, r = W) => ({ used_percentage: p, resets_at: r });
 
 // Pure merge rules.
@@ -36,6 +36,29 @@ ok(fresherWindow(w(80, NOW - 60), w(15, W - 3600), NOW).used_percentage === 15, 
 ok(fresherWindow({ used_percentage: 12 }, { used_percentage: 16 }, NOW).used_percentage === 16, "two unknown windows: the higher reading wins");
 const m = mergeRateLimits({ five_hour: w(40, W - 3600), seven_day: w(12) }, { seven_day: w(16) });
 ok(m.five_hour.used_percentage === 40 && m.seven_day.used_percentage === 16, "windows merge independently");
+
+// Readings that cannot be real (#124).
+console.log("plausible readings:");
+ok(plausibleReading("five_hour", w(30, NOW + 5 * 3600), NOW) !== null, "a 5h reset 5 hours ahead is real");
+ok(plausibleReading("five_hour", w(30, NOW + 5 * 3600 + 3600), NOW) !== null, "and one hour more is clock skew");
+ok(plausibleReading("five_hour", w(30, NOW + 7 * 3600), NOW) === null, "a 5h reset 7 hours ahead is not");
+ok(plausibleReading("five_hour", w(30, 9e9), NOW) === null, "nor one in the year 2255 (the 999d reading)");
+ok(plausibleReading("seven_day", w(30, NOW + 6 * 86400), NOW) !== null, "a 7d reset 6 days ahead is real");
+ok(plausibleReading("seven_day", w(30, NOW + 9 * 86400), NOW) === null, "a 7d reset 9 days ahead is not");
+ok(plausibleReading("five_hour", w(30, NOW - 60), NOW) !== null, "a window that already reset is real, only old");
+ok(plausibleReading("five_hour", { used_percentage: 30 }, NOW) !== null, "a reading without resets_at is kept");
+ok(plausibleReading("five_hour", w(30, "soon"), NOW) === null, "a resets_at that is not a number is not");
+ok(plausibleReading("five_hour", w(-1, NOW + 60), NOW) === null, "a negative percentage is not");
+ok(plausibleReading("five_hour", w(NaN, NOW + 60), NOW) === null && plausibleReading("five_hour", w(Infinity, NOW + 60), NOW) === null,
+  "nor a percentage that is not finite");
+ok(plausibleReading("five_hour", w(100.4, NOW + 60), NOW)?.used_percentage === 100, "above 100 is the limit reached: kept as 100");
+const pr = plausibleRateLimits({ five_hour: w(30, 9e9), seven_day: w(40, NOW + 86400), sessions: { a: 1 } }, NOW);
+ok(!("five_hour" in pr) && pr.seven_day.used_percentage === 40 && pr.sessions.a === 1,
+  "plausibleRateLimits drops only the window that cannot be real");
+
+// The renders run at the real time, and a reset further ahead than its window cannot be real
+// (#124): 4 hours from now is within the 5h window, and W - 7 h has already passed.
+W = Math.floor(Date.now() / 1000) + 4 * 3600;
 
 // End to end: two chats on one account, through the shared file.
 const tmp = mkdtempSync(path.join(os.tmpdir(), "gamebar-rl-"));
@@ -93,6 +116,38 @@ try {
     "the pool keeps 1 and one record per session, under a hash of its id");
 } finally {
   rmSync(live, { recursive: true, force: true });
+}
+
+// A made-up reading (#124): a scratch render with resets_at in the year 2255 won the pool and
+// every bar of the account showed a 5h reset in 999d.
+const fake = mkdtempSync(path.join(os.tmpdir(), "gamebar-rl-fake-"));
+try {
+  const pool = path.join(fake, "shared.json");
+  const env = { ...process.env, GAMEBAR_THEME: "minecraft", COLUMNS: "120",
+    GAMEBAR_RATELIMITS: pool, GAMEBAR_STATE: path.join(fake, "state.json"), ...sandboxEnv(fake), GAMEBAR_MSYS_REAP: "0" };
+  delete env.GAMEBAR_RATELIMITS_SHARE;
+  const render = (sid, rl, extraEnv = {}) => strip(execFileSync(process.execPath, [path.join(ROOT, "src", "statusline.js")], {
+    env: { ...env, ...extraEnv }, encoding: "utf8",
+    input: JSON.stringify({ session_id: sid, cwd: fake, model: { display_name: "Opus 5.5" }, ...(rl ? { rate_limits: rl } : {}) }),
+  }));
+  const read = () => JSON.parse(readFileSync(pool, "utf8"));
+  const real = { five_hour: w(21, W - 3600), seven_day: w(16) };
+  render("real", real);
+  render("scratch", { five_hour: w(30, 9e9), seven_day: w(16) });
+  ok(read().five_hour.resets_at === W - 3600 && read().five_hour.used_percentage === 21,
+    "a session's reading with a reset in 2255 does not enter the pool");
+  // A pool that already holds one (written before this check), with the newest `at`.
+  writeFileSync(pool, JSON.stringify({ ...read(), five_hour: { used_percentage: 30, resets_at: 9e9, at: 9e9 } }));
+  const out = render("real", real);
+  ok(!out.includes("999d") && read().five_hour.resets_at === W - 3600, "one already in the pool is dropped and the file is healed");
+  // The rate-health accumulator, which every session of the account shares, does not learn from it.
+  const health = readdirSync(fake).find((n) => /ratehealth/.test(n));
+  const before = JSON.parse(readFileSync(path.join(fake, health), "utf8"));
+  render("scratch", { five_hour: w(30, 9e9), seven_day: w(16) }, { GAMEBAR_RATELIMITS_SHARE: "0" });
+  const after = JSON.parse(readFileSync(path.join(fake, health), "utf8"));
+  ok(after.sum5 === before.sum5 && after.p5 === before.p5, `with sharing off it stays out of the health accumulator too (p5 ${before.p5} -> ${after.p5})`);
+} finally {
+  rmSync(fake, { recursive: true, force: true });
 }
 
 // The pool a release before 1.0.0 kept, mugshot_ratelimits_global.json in the old runtime
