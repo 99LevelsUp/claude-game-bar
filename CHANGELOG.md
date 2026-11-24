@@ -56,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time in a row a script runs late, it is now turned off for 2 s, its node keeps the script's last
   output and no warning shows. Each further time in a row doubles the pause (4, 8, 16 s ... up to
   10 min) and the warning line says so; a call that returns in time starts over at 2 s.
+- **A script's colour on a container reaches its children** (#96). A skin script that returned
+  `params.color` for a container recoloured only what the container draws itself (separators, a
+  box's title); its children kept the colour they had inherited before the scripts ran. Now a
+  child that sets no colour of its own takes it, at any depth, as it would take the skin's. No
+  bundled script recolours a container, so no bundled bar changes.
 
 ### Changed
 

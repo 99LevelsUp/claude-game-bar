@@ -72,27 +72,34 @@ function drawParams(r, script) {
 }
 
 // The node as it is drawn this render: a script's valid `color` and `background` replace the ones
-// the node resolved before the scripts ran.
-function recoloured(r, script, params) {
+// the node resolved before the scripts ran. `inherited` is the colour a script gave an ancestor
+// (null when none did): a node that sets no colour of its own takes it, as it would have taken the
+// ancestor's colour from the skin (#96).
+function recoloured(r, script, params, inherited) {
+  const base = inherited != null && r.p.color == null && inherited !== r.color ? { ...r, color: inherited } : r;
   const own = script && script.params && typeof script.params === "object" ? script.params : null;
-  if (!own) return r;
-  const color = Object.hasOwn(own, "color") && params.color != null ? params.color : r.color;
-  const background = Object.hasOwn(own, "background") && params.background != null ? params.background : r.background;
-  return color === r.color && background === r.background ? r : { ...r, color, background };
+  if (!own) return base;
+  const color = Object.hasOwn(own, "color") && params.color != null ? params.color : base.color;
+  const background = Object.hasOwn(own, "background") && params.background != null ? params.background : base.background;
+  return color === base.color && background === base.background ? base : { ...base, color, background };
 }
 
 function drawNode(placed, parentSurface, env) {
   const script = Object.hasOwn(env.scripts, placed.r.path) ? env.scripts[placed.r.path] : null;
   const params = drawParams(placed.r, script);
-  const r = recoloured(placed.r, script, params);
+  const r = recoloured(placed.r, script, params, env.inherit ?? null);
   const pl = r === placed.r ? placed : { ...placed, r };
+  // The colour this node's children inherit when it is not the one the tree resolved: a script
+  // recoloured this node or an ancestor.
+  const carry = r.color !== placed.r.color ? r.color : null;
+  const kidEnv = (env.inherit ?? null) === carry ? env : { ...env, inherit: carry };
   const surface = r.background && r.background !== "none" ? surfaceRgb(r.background, parentSurface) : parentSurface;
   const restore = bgEsc(surface);
   let lines;
   if (r.desc.container) {
     lines = r.desc.draw(pl, {
       // A container that paints its own background (a box's fill) draws its children on it.
-      drawKid: (k, on = surface) => drawNode(k, on, env),
+      drawKid: (k, on = surface) => drawNode(k, on, kidEnv),
       restore, surface, surfaceKey: surface.join(";"),
       sep: fgEsc(plainRgb(r.color)), lines: env.lines, script, params,
     });
