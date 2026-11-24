@@ -97,6 +97,17 @@ try {
     ok(equal, `from 40 to 250 columns every visible slot is one cell of one width${bad ? ` (${bad})` : ""}`);
   }
 
+  console.log("a narrower terminal: the chat goes before a slot narrows:");
+  {
+    const CELL = /┃[^┃]*(?=┃)/g;
+    for (const width of [75, 85, 94, 100]) {
+      const r = draw({ width });
+      const cells = (r.plain[4].match(CELL) ?? []).map((c) => vlen(c) - 1);
+      ok(!find(r.fit.tree, "chat") && cells.length === 9 && cells.every((w) => w === 7),
+        `at ${width} columns the chat is hidden and all nine slots are whole (${cells.join(" ")})`);
+    }
+  }
+
   console.log("a short terminal:");
   {
     ok(draw({ rows: 6 }).lines.length === 6 && hotbarOf(draw({ rows: 6 })), "with room for six rows the whole HUD is drawn");
@@ -113,9 +124,13 @@ try {
     const hud = hotbarOf(wide);
     ok(hud && hud.kids.length === 9, `the hotbar has nine slots (${hud ? hud.kids.length : "none"})`);
     const text = wide.plain.join("\n");
-    ok(["🪓", "💎", "🌿", "🧱", "🐺", "🏆", "💥", "🔥", "🕓"].every((icon) => text.includes(icon)), "each slot shows its item");
-    ok(["1M", "$1.83", "185", "2/5", "12%", "14:23"].every((v) => text.includes(v)), "and the value of its metric under it");
+    ok(["⏳", "💎", "🌿", "🧱", "🐺", "🏆", "💥", "🔥", "🕓"].every((icon) => text.includes(icon)), "each slot shows its item");
+    ok(["2h13m", "$1.83", "185", "2/5", "12%", "14:23"].every((v) => text.includes(v)), "and the value of its metric under it");
     ok(/┏━+[┳┓]/.test(wide.plain[2]) && /┗━+[┻┛]/.test(wide.plain[5]), "the slots are drawn with heavy lines");
+    ok(/┃ +⏳ +┃/.test(wide.plain[3]) && /┃ 2h13m ┃/.test(wide.plain[4]), "the first slot counts down to the 5h limit's reset under an hourglass");
+    const { "usage.reset5h": _r, ...noReset } = RAW_SAMPLE;
+    const bareSlot = draw({ values: noReset });
+    ok(bareSlot.plain[3].includes("⏳") && hotbarOf(bareSlot).kids.length === 9, "without a 5h limit the hourglass keeps its slot");
     ok(/━ 31 ━/.test(wide.plain[1]), "the XP bar carries the 7-day percentage as its level");
     ok(count(wide.plain[0], "♥") === 4 && count(wide.plain[0], "♡") === 6, `the hearts show what is left of the 5h limit (${wide.plain[0].trim()})`);
     ok(count(wide.plain[0], "🍖") === 2 && count(wide.plain[0], "🦴") === 8, "the hunger row shows what is left of the context");
@@ -167,7 +182,7 @@ try {
   {
     const r = draw({ width: 38 });
     const shown = ids(hotbarOf(r));
-    const slots = ["slot-window", "slot-cost", "slot-changes", "slot-added", "slot-agents", "slot-tasks", "slot-errors", "slot-cpu", "slot-clock"];
+    const slots = ["slot-reset", "slot-cost", "slot-changes", "slot-added", "slot-agents", "slot-tasks", "slot-errors", "slot-cpu", "slot-clock"];
     ok(!r.fit.clipped && r.lines.every((l) => vlen(l) <= 38), "the bar fits");
     ok(shown.length > 0 && shown.length < 9 && same(shown, slots.slice(0, shown.length)), `the rightmost slots drop first (${shown.join(" ")})`);
     ok(r.plain[0].includes("♥") && r.plain[0].includes("🦴") && /━/.test(r.plain[1]), "the hearts, the hunger row and the XP bar stay");
