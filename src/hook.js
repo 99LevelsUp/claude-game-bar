@@ -25,7 +25,7 @@ import path from "node:path";
 import { statePaths, ensureRuntimeDir, servedElsewhere } from "./platform/runtime.js";
 import { superviseDaemon } from "./platform/supervise.js";
 import { sweepState, endSession } from "./platform/sweep.js";
-import { bashCount, reapStaleShells, REAP_MIN } from "./platform/reap.js";
+import { bashCount, reapStaleShells, runReaper, REAP_MIN } from "./platform/reap.js";
 import { gitSnapshot, gitMarkerPath, msysMarkerPath, shouldSnapshotGit, shouldSnapshotMsys } from "./platform/snapshots.js";
 
 // Project an event down to only the fields src/platform/journal.js consumes. Keeps journal lines tiny and
@@ -130,16 +130,15 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   // `node hook.js --reap` is the reaper on its own, with no journal and no stdin. The render path
   // fires it detached (see maybeReap in statusline.js) so hung wrappers are still cleaned up while
   // the session sits idle and no hook events are arriving — which is exactly when a 1 s refresh
-  // timer is the only thing spawning shells.
-  if (process.argv.includes("--reap")) {
-    try { reapStaleShells(); } catch { /* best effort */ }
-    process.exit(0);
-  }
+  // timer is the only thing spawning shells. It bounds its own life (runReaper in
+  // src/platform/reap.js, #53).
   // `node hook.js --assets <game folder>` installs that game's pinned asset package, started
   // detached by a render that found it missing (startInstall in src/platform/assets.js), which
   // hands it the store's install lock. Loaded only here, so a hook event never pays for it.
   const at = process.argv.indexOf("--assets");
-  if (at >= 0) {
+  if (process.argv.includes("--reap")) {
+    runReaper();
+  } else if (at >= 0) {
     const dir = process.argv[at + 1];
     import("./platform/assets.js")
       .then((m) => (dir ? m.installInBackground(dir) : null))

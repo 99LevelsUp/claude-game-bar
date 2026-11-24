@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps its moment in the chat's cycle whether it applies or not; a line whose fact is not known
   leaves the message before it showing, so the chat no longer skips to another place in its
   cycle when, say, a subagent starts or the git status changes.
+- **Detached reapers no longer pile up on Windows** (#53). A `node hook.js --reap` started by a
+  render or the daemon was seen to hang for an hour and pile up with others. Its work now runs
+  without blocking, and it ends itself after 20 s whatever a child process does; a healthy one
+  still takes about 1 s.
 
 ## [3.0.0] - 2026-11-23
 

@@ -9,13 +9,13 @@
 // per-platform: a line on Windows, no line elsewhere (bashCount returns null -> field hidden).
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadState } from "../../src/metrics/tasks.js";
 import { activityValues } from "../../src/metrics/activity.js";
-import { stalePids, parseBashShells } from "../../src/platform/reap.js";
+import { stalePids, parseBashShells, reapStaleShellsAsync, runReaper, REAPER_LIFE_MS } from "../../src/platform/reap.js";
 import { sandboxEnv } from "../_sandbox-env.mjs";
 
 // Pin the DOOM theme so a theme saved on this machine (`theme minecraft`) can't change
@@ -172,6 +172,46 @@ try {
   // And it must be switchable off outright.
   const off = renderOnce({ GAMEBAR_MSYS_REAP: "0", GAMEBAR_REAP_TICK: "0" });
   ok(off.out.trim().length > 0, "GAMEBAR_MSYS_REAP=0 leaves rendering intact");
+
+  // --- The detached reaper bounds its own life (#53). ----------------------------------------
+  // Its work, with a recorded exec instead of real processes.
+  const calls = [];
+  const fakeExec = (listing) => async (file, args) => { calls.push([file, ...args]); return file === "taskkill" ? "" : listing; };
+  const listing = "301|60000|bash.exe -c \"node statusline.js\"\r\n302|60000|bash.exe -c \"npm test\"\r\n";
+  ok(await reapStaleShellsAsync({ platform: "linux", exec: fakeExec(listing) }) === 0 && calls.length === 0,
+    "off Windows the async reaper does nothing and starts nothing");
+  const killed = await reapStaleShellsAsync({ platform: "win32", exec: fakeExec(listing) });
+  ok(killed === 1 && calls.length === 2 && calls[1].join(" ") === "taskkill /F /PID 301",
+    `the async reaper kills only the hung statusline wrapper (got ${killed}, ${JSON.stringify(calls)})`);
+  calls.length = 0;
+  ok(await reapStaleShellsAsync({ platform: "win32", exec: async (file, args) => { calls.push([file, ...args]); return null; } }) === 0
+    && calls.length === 1, "a failed or timed-out listing kills nothing");
+
+  // A reap that never finishes still ends the process once the watchdog fires; one that finishes
+  // ends it at once, and only once.
+  const exits = [];
+  const t0 = Date.now();
+  await Promise.race([runReaper({ reap: () => new Promise(() => {}), lifeMs: 100, exit: (c) => exits.push(["hung", c, Date.now() - t0]) }),
+    new Promise((r) => setTimeout(r, 400))]);
+  ok(exits.length === 1 && exits[0][1] === 0 && exits[0][2] >= 90 && exits[0][2] < 400,
+    `a hung reap is ended by the watchdog after its life (${JSON.stringify(exits)})`);
+  exits.length = 0;
+  await runReaper({ reap: async () => 1, lifeMs: 100, exit: (c) => exits.push(c) });
+  await new Promise((r) => setTimeout(r, 200));
+  ok(exits.length === 1 && exits[0] === 0, `a finished reap exits once, the watchdog cleared (${JSON.stringify(exits)})`);
+  exits.length = 0;
+  await runReaper({ reap: async () => { throw new Error("boom"); }, lifeMs: 100, exit: (c) => exits.push(c) });
+  ok(exits.length === 1 && exits[0] === 0, "a reap that throws still exits 0");
+
+  // `node hook.js --reap` exits without running the hook: no stdin read, no journal line.
+  const reapState = path.join(tmp, "reap-state.json");
+  const rt0 = Date.now();
+  execFileSync(process.execPath, [HOOK, "--reap"], {
+    input: JSON.stringify({ session_id: "reaponly", hook_event_name: "PostToolUse" }), encoding: "utf8",
+    env: { ...process.env, ...sandboxEnv(tmp), GAMEBAR_STATE: reapState, GAMEBAR_MSYS_REAP: "0" },
+  });
+  ok(Date.now() - rt0 < REAPER_LIFE_MS, `the reaper process exits on its own (${Date.now() - rt0} ms)`);
+  ok(!existsSync(reapState + ".jsonl"), "the reaper does not run the hook (no journal line)");
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
