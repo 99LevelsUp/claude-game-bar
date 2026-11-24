@@ -25,7 +25,9 @@ The plans and ideation documents in `docs/` cite the IDs of the backlog that cam
 
 `master` is protected: it cannot be force-pushed or deleted, and it takes changes only through a
 pull request whose `test` and `e2e` checks (the `Test` workflow on Linux) have passed. No review
-approval is required. This holds for everyone, including the repository owner.
+approval is required. This holds for everyone, including the repository owner. The same workflow
+also runs the suite on Windows (`test-windows`) and the script host on every supported Node on
+both systems; the merge waits for them only once they are made required checks.
 
 1. Branch from an up-to-date `master`: `git switch master && git pull && git switch -c <type>/<topic>`
    (`feat/`, `fix/`, `docs/`, `chore/`, `release/`).

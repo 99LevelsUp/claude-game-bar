@@ -1,8 +1,8 @@
 name: Test
 
-# Runs the suite on Linux for every push to master and every pull request, so a
-# Linux-only difference (snapshot output, paths, temp handling) shows up before a
-# release tag is pushed. Publishing stays in publish.yml.
+# Runs the suite on Linux and Windows for every push to master and every pull
+# request, so a platform-only difference (snapshot output, paths, temp handling)
+# shows up before a release tag is pushed. Publishing stays in publish.yml.
 
 on:
   push:
@@ -15,6 +15,26 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+  # The same suite on Windows, the platform the bar's owner runs: Git Bash for the client, the
+  # MSYS snapshots, Windows paths and process handling only run here.
+  test-windows:
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -51,9 +71,9 @@ jobs:
       - name: Daemon end to end
         run: npm run test:e2e
 
-  # The script host on every supported Node and on Windows, where the main suite does not run:
-  # a worker thread answered through Atomics.wait must stop a script that never returns there
-  # too. The test prints its spawn, round-trip and per-call times for each combination.
+  # The script host on every supported Node on Linux and Windows: a worker thread answered
+  # through Atomics.wait must stop a script that never returns on every combination. The
+  # test prints its spawn, round-trip and per-call times for each combination.
   script-host:
     strategy:
       fail-fast: false

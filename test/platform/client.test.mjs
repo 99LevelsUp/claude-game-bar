@@ -253,7 +253,10 @@ try {
 
     const gone = path.join(sandbox, "no-such-dir");
     const g = run({ sid, env: { ...sandboxEnv(gone) } });
-    ok(g.err === "", `a missing temp dir writes nothing to stderr (got ${show(g.err)})`);
+    // Git Bash itself warns at startup when its temp dir is missing, before the client runs and so
+    // before its `exec 2>/dev/null`; Claude Code shows only stdout. Anything else is the client's.
+    const gErr = WIN ? g.err.replace(/^bash(\.exe)?: warning: could not find \/tmp, please create!\r?\n/, "") : g.err;
+    ok(gErr === "", `a missing temp dir writes nothing to stderr beyond Git Bash's own warning (got ${show(g.err)})`);
     ok(g.out === OFFLINE, `a missing temp dir prints the offline line (got ${show(g.out)})`);
   }
 
