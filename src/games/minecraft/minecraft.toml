@@ -4,8 +4,9 @@
 # context), the XP bar (the 7-day limit, its level the percentage) and a 9-slot hotbar of session
 # stats. The highlighted slot jumps to what just happened, then wanders.
 #
-# As the terminal narrows the chat goes first, then the hotbar's slots from the right, all slots
-# always equally wide; the hearts, hunger and XP bar go last.
+# As the terminal narrows the chat goes first, before any slot narrows, so the nine slots stay whole
+# beside it; narrower still the slots shrink together, then go from the right; the hearts, hunger
+# and XP bar go last.
 version = 2
 game = "minecraft"
 
@@ -91,7 +92,8 @@ min_width = 20
 empty = "zero"
 priority = 3
 
-# Nine equal cells that shrink together. The highlight script knows the slots of the errors, the
+# Nine equal cells that shrink together. The first counts down to the 5h limit's reset (4h05m),
+# like a Minecraft clock. The highlight script knows the slots of the errors, the
 # lines added and the tasks by these ids.
 [element.hotbar]
 kind = "grid"
@@ -101,7 +103,7 @@ selected_color = "#ffffff"
 fill = "#262626"
 script = "minecraft:scripts/hotbar-highlight.js"
 children = [{ kind = "repeat", template = "slot", items = [
-  { id = "slot-window", item = "🪓", metric = "model.window" },
+  { id = "slot-reset", item = "⏳", metric = "usage.reset5h" },
   { id = "slot-cost", item = "💎", metric = "cost.total" },
   { id = "slot-changes", item = "🌿", metric = "git.status" },
   { id = "slot-added", item = "🧱", metric = "loc.added" },

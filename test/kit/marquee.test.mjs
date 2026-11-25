@@ -3,6 +3,10 @@ import { marquee, vlen } from "../../src/kit/text.js";
 let fails = 0;
 const ok = (c, m) => { console.log((c ? "  ok   " : "  FAIL ") + m); if (!c) fails++; };
 
+// Emoji that default to emoji presentation are two columns wide, the watch and hourglass ones too.
+ok(["⌚", "⌛", "⏰", "⏳", "✅", "❌", "🕓", "⏩"].every((e) => vlen(e) === 2) && vlen("⏳ 2h13m") === 8,
+  "wide emoji (⌚ ⌛ ⏰ ⏳ ✅ ❌ 🕓 ⏩) count two columns");
+
 // Fits -> returned verbatim, padded to exactly width, constant across ticks.
 ok(marquee("abc", 5, 0) === "abc  ", "short text padded to width");
 ok(marquee("abc", 5, 7) === "abc  ", "short text is tick-invariant");

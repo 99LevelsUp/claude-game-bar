@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Minecraft: the first hotbar slot counts down to the 5h limit's reset** (⏳ `2h13m`) in place of
+  the axe, which showed the context window's size (nearly always `1M`). A session without a 5h
+  limit keeps the slot, empty.
+
+### Fixed
+
+- Display width: ⌚ ⌛ ⏰ ⏳ count as two columns, like the other emoji, so a cell holding one is
+  not drawn a column too wide.
+
 ## [3.1.0] - 2026-11-24
 
 ### Fixed

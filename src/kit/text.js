@@ -5,12 +5,15 @@
 // SGR + OSC 8 hyperlinks — stripped for width measurement.
 const ANSI_RE = /\x1b\[[0-9;]*m|\x1b\]8;[^\x07\x1b]*(?:\x1b\\|\x07)/g;
 
+// Emoji outside the ranges above that default to emoji presentation (2 cols): ⌚ ⌛ ⏰ ⏳ ✅ ❌.
+const WIDE_EMOJI = new Set([0x231a, 0x231b, 0x23f0, 0x23f3, 0x2705, 0x274c]);
+
 export function vlen(s) {
   let n = 0;
   for (const ch of String(s).replace(ANSI_RE, "")) {
     const cp = ch.codePointAt(0);
     n += (cp >= 0x1f300 && cp <= 0x1faff) || (cp >= 0x23e9 && cp <= 0x23ec)
-      || cp === 0x2705 || cp === 0x274c ? 2 : 1; // ✅ ❌ are emoji-presentation (2 cols)
+      || WIDE_EMOJI.has(cp) ? 2 : 1;
   }
   return n;
 }
